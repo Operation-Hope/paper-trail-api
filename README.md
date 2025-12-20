@@ -54,16 +54,18 @@ Data sources explored but not yet integrated:
 
 ### Public Domain
 - **FEC** - Candidate files, Schedule A/B, Committees/PACs
-- **Voteview** - Roll call votes, NOMINATE scores
 - **IRS** - 990 forms, Exempt Org BMF, Form 8871/8872
 - **Congress.gov** - Bill metadata and subject indexing
 - **DOL** - LM-2/3/4 union filings
 - **LDA LD-203** - Lobbying contribution reports
 - **SEC** - CIK/Ticker reference data
 
-### Open License
+### Open License (Non-Commercial)
+- **Voteview** - CC BY-NC 4.0 (attribution required, non-commercial only)
 - **GLEIF LEI** - CC0
-- **Open States** - Open Data Commons (check current terms)
+
+### Open License (Check Terms)
+- **Open States** - Open Data Commons
 
 ### Academic Use (Transformed/Derived)
 - **DIME** - [Stanford DIME Project](https://data.stanford.edu/dime)
