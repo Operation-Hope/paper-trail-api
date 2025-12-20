@@ -63,6 +63,7 @@ Data sources explored but not yet integrated:
 
 ### Open License (Non-Commercial)
 - **Voteview** - CC BY-NC 4.0 (attribution required, non-commercial only)
+  - Citation: Lewis, Jeffrey B., Keith Poole, Howard Rosenthal, Adam Boche, Aaron Rudkin, and Luke Sonnet. 2024. Voteview: Congressional Roll-Call Votes Database. https://voteview.com/
 
 ### Open License (Check Terms)
 - **Open States** - Open Data Commons
@@ -77,6 +78,9 @@ Data sources explored but not yet integrated:
 ### Not Included
 - OpenSecrets bulk data (requires agreement)
 - NIMSP/CRP itemized state contributions
+
+### Disclaimer
+This project provides tools for processing publicly available political finance data. The data is provided "as is" without warranty of any kind. Users are responsible for verifying data accuracy and complying with all applicable data source licenses. This project is intended for research, journalism, and public transparency purposes.
 
 ---
 
