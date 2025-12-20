@@ -48,6 +48,36 @@ Data sources explored but not yet integrated:
 - **SEC CIK/Ticker** - Corporate identifier reference data
 - **GLEIF LEI** - Legal Entity Identifier global database
 
+---
+
+## Data Sources & Licensing
+
+### Public Domain
+- **FEC** - Candidate files, Schedule A/B, Committees/PACs
+- **Voteview** - Roll call votes, NOMINATE scores
+- **IRS** - 990 forms, Exempt Org BMF, Form 8871/8872
+- **Congress.gov** - Bill metadata and subject indexing
+- **DOL** - LM-2/3/4 union filings
+- **LDA LD-203** - Lobbying contribution reports
+- **SEC** - CIK/Ticker reference data
+
+### Open License
+- **GLEIF LEI** - CC0
+- **Open States** - Open Data Commons (check current terms)
+
+### Academic Use (Transformed/Derived)
+- **DIME** - [Stanford DIME Project](https://data.stanford.edu/dime)
+  - Citation: Bonica, Adam. 2024. Database on Ideology, Money in Politics, and Elections: Public version 4.0. Stanford, CA: Stanford University Libraries.
+  - Used for non-commercial research and public transparency
+  - NIMSP/CRP state-level records excluded (CC BY-NC-SA, requires separate access)
+- **Congressional Bills Project** - Academic dataset (1980-2002)
+
+### Not Included
+- OpenSecrets bulk data (requires agreement)
+- NIMSP/CRP itemized state contributions
+
+---
+
 ### What It Does
 
 1. **Download** - Fetches raw data from S3 (DIME)
