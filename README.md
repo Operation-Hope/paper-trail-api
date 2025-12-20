@@ -48,6 +48,42 @@ Data sources explored but not yet integrated:
 - **SEC CIK/Ticker** - Corporate identifier reference data
 - **GLEIF LEI** - Legal Entity Identifier global database
 
+---
+
+## Data Sources & Licensing
+
+### Public Domain
+- **FEC** - Candidate files, Schedule A/B, Committees/PACs
+- **IRS** - 990 forms, Exempt Org BMF, Form 8871/8872
+- **Congress.gov** - Bill metadata and subject indexing
+- **DOL** - LM-2/3/4 union filings
+- **LDA LD-203** - Lobbying contribution reports
+- **SEC** - CIK/Ticker reference data
+- **GLEIF LEI** - Legal Entity Identifier (CC0)
+
+### Open License (Non-Commercial)
+- **Voteview** - CC BY-NC 4.0 (attribution required, non-commercial only)
+  - Citation: Lewis, Jeffrey B., Keith Poole, Howard Rosenthal, Adam Boche, Aaron Rudkin, and Luke Sonnet. 2024. Voteview: Congressional Roll-Call Votes Database. https://voteview.com/
+
+### Open License (Check Terms)
+- **Open States** - Open Data Commons
+
+### Academic Use (Transformed/Derived)
+- **DIME** - [Stanford DIME Project](https://data.stanford.edu/dime)
+  - Citation: Bonica, Adam. 2024. Database on Ideology, Money in Politics, and Elections: Public version 4.0. Stanford, CA: Stanford University Libraries.
+  - Used for non-commercial research and public transparency
+  - NIMSP/CRP state-level records excluded (CC BY-NC-SA, requires separate access)
+- **Congressional Bills Project** - Academic dataset (1980-2002)
+
+### Not Included
+- OpenSecrets bulk data (requires agreement)
+- NIMSP/CRP itemized state contributions
+
+### Disclaimer
+This project provides tools for processing publicly available political finance data. The data is provided "as is" without warranty of any kind. Users are responsible for verifying data accuracy and complying with all applicable data source licenses. This project is intended for research, journalism, and public transparency purposes.
+
+---
+
 ### What It Does
 
 1. **Download** - Fetches raw data from S3 (DIME)
