@@ -59,10 +59,10 @@ Data sources explored but not yet integrated:
 - **DOL** - LM-2/3/4 union filings
 - **LDA LD-203** - Lobbying contribution reports
 - **SEC** - CIK/Ticker reference data
+- **GLEIF LEI** - Legal Entity Identifier (CC0)
 
 ### Open License (Non-Commercial)
 - **Voteview** - CC BY-NC 4.0 (attribution required, non-commercial only)
-- **GLEIF LEI** - CC0
 
 ### Open License (Check Terms)
 - **Open States** - Open Data Commons
