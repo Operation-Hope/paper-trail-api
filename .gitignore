@@ -449,3 +449,5 @@ paper-trail-dump
 local/*
 
 !local/.gitkeep
+# Raw data files (large CSV/GZ files)
+_data/
