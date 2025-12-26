@@ -22,15 +22,18 @@ The DIME campaign finance dataset is available on Huggingface:
 - **58.5 GB** in Parquet format
 - **43 columns** including contributor/recipient info, amounts, ideology scores
 
-### Load into DuckDB (Recommended)
+### Load into DuckDB or PostgreSQL
 
 ```bash
 # Install the loader
 cd scripts/duckdb_loader
 uv pip install -e .
 
-# Load a subset into a local database
+# Load into DuckDB (quick analysis)
 duckdb-loader load contributions.duckdb --recent 4 -s CA --min-amount 1000
+
+# Or load into PostgreSQL (full-stack development)
+duckdb-loader load-postgres $DATABASE_URL --limit 100000
 ```
 
 Or use Python:
@@ -49,7 +52,7 @@ result = load_to_duckdb(
 print(f"Loaded {result.rows_loaded:,} rows")
 ```
 
-See **[docs/QUICKSTART_DUCKDB.md](docs/QUICKSTART_DUCKDB.md)** for full documentation.
+See **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)** for full documentation.
 
 ---
 
@@ -58,8 +61,7 @@ See **[docs/QUICKSTART_DUCKDB.md](docs/QUICKSTART_DUCKDB.md)** for full document
 This repository provides:
 
 1. **Huggingface Dataset** - Raw DIME contribution data in Parquet format
-2. **DuckDB Loader** - Tools to load subsets into a local database for analysis
-3. **ETL Pipeline** (reference) - Scripts used to process and transform the data
+2. **Data Loader** - Tools to load subsets into DuckDB or PostgreSQL for local development
 
 ### Data Sources
 
@@ -127,14 +129,6 @@ This project provides tools for processing publicly available political finance 
 
 ---
 
-## ETL Pipeline (Reference)
-
-The `etl/` directory contains reference scripts used to process the raw data. These are provided for transparency and reproducibility but are not required to use the data.
-
-See `etl/README.md` for details on the transformation pipeline.
-
----
-
 ## Data Coverage
 
 ### Huggingface Dataset
@@ -151,7 +145,7 @@ Key columns include:
 - Contributor: `contributor.name`, `contributor.state`, `contributor.employer`, `contributor.cfscore`
 - Recipient: `recipient.name`, `recipient.party`, `recipient.state`, `candidate.cfscore`
 
-See [docs/QUICKSTART_DUCKDB.md](docs/QUICKSTART_DUCKDB.md) for the full column list.
+See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for the full column list.
 
 ---
 
@@ -160,21 +154,21 @@ See [docs/QUICKSTART_DUCKDB.md](docs/QUICKSTART_DUCKDB.md) for the full column l
 ```
 docs/
 ├── RAW_DATA_CATALOG.md        # Data source documentation
-└── QUICKSTART_DUCKDB.md       # DuckDB loader guide
+└── LOCAL_DEVELOPMENT.md       # Local development guide
 
 scripts/
-├── duckdb_loader/             # Load HF data into DuckDB
+├── duckdb_loader/             # Load HF data into DuckDB or PostgreSQL
 │   ├── duckdb_loader/
-│   │   ├── loader.py          # Core loading logic
+│   │   ├── loader.py          # DuckDB loading logic
+│   │   ├── postgres_loader.py # PostgreSQL loading logic
 │   │   ├── filters.py         # Filter presets
-│   │   ├── schema.py          # DuckDB schema
+│   │   ├── schema.py          # Schema definitions
 │   │   └── cli.py             # Command-line interface
 │   └── pyproject.toml
 │
 └── dime_converter/            # CSV to Parquet converter
     └── ...
 
-etl/                           # Reference: ETL pipeline scripts
 examples/                      # Usage examples
 ```
 

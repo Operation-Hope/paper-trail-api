@@ -1,6 +1,8 @@
-# Quickstart: Load DIME Data into DuckDB
+# Local Development: Load DIME Data
 
-This guide shows how to load the [DIME campaign finance dataset](https://huggingface.co/datasets/Dustinhax/tyt) from Huggingface into a local DuckDB database for analysis.
+This guide shows how to load the [DIME campaign finance dataset](https://huggingface.co/datasets/Dustinhax/tyt) from Huggingface into a local database for development and analysis.
+
+**No AWS credentials required** - data streams directly from Huggingface.
 
 ## Dataset Overview
 
@@ -17,10 +19,17 @@ uv pip install -e .
 
 ## Quick Start
 
-### Command Line
+Choose your target database:
+
+| Target | Best For | Setup |
+|--------|----------|-------|
+| **DuckDB** | Quick analysis, exploration, no database setup | Just run the command |
+| **PostgreSQL** | Full-stack development, testing API integration | Requires running PostgreSQL |
+
+### Option 1: DuckDB (Recommended for Analysis)
 
 ```bash
-# Load a sample (100k rows)
+# Load a sample (100k rows) - fastest way to get started
 duckdb-loader load sample.duckdb --limit 100000
 
 # Load specific election cycles
@@ -36,12 +45,30 @@ duckdb-loader info ca_large.duckdb
 duckdb-loader query ca_large.duckdb "SELECT COUNT(*) FROM contributions"
 ```
 
+### Option 2: PostgreSQL (For Full-Stack Development)
+
+```bash
+# Set your database URL (or export DATABASE_URL)
+export DATABASE_URL="postgresql://user:password@localhost:5432/papertrail"
+
+# Load a sample (100k rows)
+duckdb-loader load-postgres $DATABASE_URL --limit 100000
+
+# Load 2024 cycle only
+duckdb-loader load-postgres $DATABASE_URL -c 2024
+
+# Load last 4 cycles, California only
+duckdb-loader load-postgres $DATABASE_URL --recent 4 -s CA
+```
+
+**Note:** Column names with dots (e.g., `contributor.name`) are converted to underscores (e.g., `contributor_name`) in PostgreSQL for compatibility.
+
 ### Python API
 
 ```python
+# DuckDB
 from duckdb_loader import load_to_duckdb, CycleFilter, StateFilter, AmountFilter
 
-# Load with filters
 result = load_to_duckdb(
     "contributions.duckdb",
     filters=[
@@ -50,7 +77,16 @@ result = load_to_duckdb(
         AmountFilter(min_amount=100),
     ],
 )
+print(f"Loaded {result.rows_loaded:,} rows")
 
+# PostgreSQL
+from duckdb_loader import load_to_postgres
+
+result = load_to_postgres(
+    "postgresql://localhost/papertrail",
+    filters=[CycleFilter([2024])],
+    limit=100_000,
+)
 print(f"Loaded {result.rows_loaded:,} rows")
 ```
 

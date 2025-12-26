@@ -404,7 +404,7 @@ $RECYCLE.BIN/
 *.csv
 *.parquet
 
-# ETL data directories (downloaded via scripts/etl/download_*.sh)
+# Data directories
 /data/
 
 # Legacy data directories
@@ -449,5 +449,3 @@ paper-trail-dump
 local/*
 
 !local/.gitkeep
-# Raw data files (large CSV/GZ files)
-_data/

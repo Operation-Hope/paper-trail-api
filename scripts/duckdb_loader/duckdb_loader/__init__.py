@@ -1,10 +1,14 @@
-"""Load DIME data from Huggingface into a local DuckDB database."""
+"""Load DIME data from Huggingface into DuckDB or PostgreSQL."""
 
 from .loader import (
     load_to_duckdb,
     LoadResult,
     query_parquet_direct,
     AVAILABLE_CYCLES,
+)
+from .postgres_loader import (
+    load_to_postgres,
+    PostgresLoadResult,
 )
 from .schema import create_schema, CONTRIBUTIONS_COLUMNS
 from .filters import (
@@ -18,9 +22,14 @@ from .filters import (
 )
 
 __all__ = [
+    # DuckDB
     "load_to_duckdb",
     "LoadResult",
     "query_parquet_direct",
+    # PostgreSQL
+    "load_to_postgres",
+    "PostgresLoadResult",
+    # Shared
     "AVAILABLE_CYCLES",
     "create_schema",
     "CONTRIBUTIONS_COLUMNS",
