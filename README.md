@@ -172,12 +172,6 @@ uv run download_and_load.py --transform --load --verbose
 
 You can also run each phase separately:
 
-**Download Data**
-```bash
-./download_contributions.sh  # DIME from S3
-./download_voteview.sh       # Voteview members
-```
-
 **Transform Data**
 ```bash
 uv run transform_politicians.py

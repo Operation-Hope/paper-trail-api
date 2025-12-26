@@ -101,8 +101,6 @@ Creates required directories:
 
 ### Download Data
 
-#### Option 1: Unified Download Script (Recommended)
-
 ```bash
 # Download all data (1980-2024)
 uv run download_and_load.py
@@ -118,22 +116,6 @@ uv run download_and_load.py --year 2020 --dry-run
 
 # Force re-download
 uv run download_and_load.py --force
-```
-
-#### Option 2: Individual Download Scripts
-
-```bash
-# Download contributions from DIME S3 bucket
-./download_contributions.sh
-
-# Download Voteview data
-./download_voteview.sh
-
-# Download Congressional Bills Project data
-./download_cbp.sh
-
-# Download Congress.gov data
-./download_congressgov.sh
 ```
 
 ### Transform Data
@@ -258,7 +240,6 @@ etl/
 ├── setup.sh                           # Create directory structure
 │
 ├── download_and_load.py               # Unified download/transform/load script
-├── download_*.sh                      # Individual download scripts
 │
 ├── transform_*.py                     # Data transformation scripts
 ├── load_*.py                          # Database loading scripts
