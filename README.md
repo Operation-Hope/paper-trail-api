@@ -1,30 +1,73 @@
-# Paper Trail ETL Pipeline 🚧
+# Paper Trail 🚧
 
 <p align="center">
-  <strong>Campaign Finance Data Pipeline</strong>
+  <strong>Campaign Finance Data for Research & Analysis</strong>
   <br />
-  Download, transform, and load political contribution data into PostgreSQL
+  915 million political contributions (1979-2024) available on Huggingface
   <br />
   💰 Campaign Contributions • 🏛️ Politicians • 👥 Donors
 </p>
 
 > 🚧 **Work in Progress** - This project is under active development
->
-> **Note**: This repository temporarily houses both the ETL pipeline and API for ease of iteration. Once each component reaches a more stable state, they will be separated into independent repositories.
+
+---
+
+## Quick Start: Use the Data
+
+The DIME campaign finance dataset is available on Huggingface:
+
+**[📊 Dustinhax/tyt on Huggingface](https://huggingface.co/datasets/Dustinhax/tyt)**
+
+- **915 million** contribution records (1979-2024)
+- **58.5 GB** in Parquet format
+- **43 columns** including contributor/recipient info, amounts, ideology scores
+
+### Load into DuckDB (Recommended)
+
+```bash
+# Install the loader
+cd scripts/duckdb_loader
+uv pip install -e .
+
+# Load a subset into a local database
+duckdb-loader load contributions.duckdb --recent 4 -s CA --min-amount 1000
+```
+
+Or use Python:
+
+```python
+from duckdb_loader import load_to_duckdb, CycleFilter, StateFilter
+
+result = load_to_duckdb(
+    "contributions.duckdb",
+    filters=[
+        CycleFilter([2020, 2022, 2024]),
+        StateFilter(["CA", "NY"]),
+    ],
+    limit=100_000,  # Start small
+)
+print(f"Loaded {result.rows_loaded:,} rows")
+```
+
+See **[docs/QUICKSTART_DUCKDB.md](docs/QUICKSTART_DUCKDB.md)** for full documentation.
 
 ---
 
 ## Overview
 
-This ETL pipeline processes campaign finance data from DIME (Database on Ideology, Money in Politics, and Elections) and loads it into a PostgreSQL database.
+This repository provides:
+
+1. **Huggingface Dataset** - Raw DIME contribution data in Parquet format
+2. **DuckDB Loader** - Tools to load subsets into a local database for analysis
+3. **ETL Pipeline** (reference) - Scripts used to process and transform the data
 
 ### Data Sources
 
 **DIME** (Database on Ideology, Money in Politics, and Elections)
-- Campaign contributions (1980-2024) - ~290 million transaction records
+- Campaign contributions (1979-2024) - 915 million transaction records
 - Politicians/Recipients - Federal candidates who received contributions
 - Donors/Contributors - Individuals and organizations making contributions
-- Source: Private S3 bucket (AWS credentials required)
+- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt)
 
 #### Coming Soon
 
@@ -84,269 +127,56 @@ This project provides tools for processing publicly available political finance 
 
 ---
 
-### What It Does
+## ETL Pipeline (Reference)
 
-1. **Download** - Fetches raw data from S3 (DIME)
-2. **Transform** - Cleans, normalizes, and prepares data for database insertion
-3. **Load** - Bulk inserts data into PostgreSQL with optimized batch processing
+The `etl/` directory contains reference scripts used to process the raw data. These are provided for transparency and reproducibility but are not required to use the data.
 
----
-
-## Quick Start
-
-### Prerequisites
-
-- **[Python 3.13+](https://www.python.org/downloads/)**
-- **[uv](https://docs.astral.sh/uv/getting-started/installation/)** package manager
-- **[PostgreSQL 15+](https://www.postgresql.org/download/)** database
-- **[AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)** with credentials for S3 access (contact maintainers)
-
-### Installation
-
-```bash
-# Clone repository
-git clone https://github.com/Operation-Hope/paper-trail-api.git
-cd paper-trail-api/etl
-
-# Install dependencies
-uv sync
-```
-
-### Configuration
-
-Set your database connection:
-
-```bash
-export DATABASE_URL="postgresql://user:password@host:5432/database"
-```
-
-Configure AWS credentials (required for DIME data):
-
-```bash
-aws configure
-# AWS Access Key ID: [your-access-key]
-# AWS Secret Access Key: [your-secret-key]
-# Default region: us-east-1
-```
-
-**Note:** Campaign contribution data is in a private S3 bucket. Contact repository maintainers for AWS credentials.
-
-### Run the Pipeline
-
-```bash
-cd etl
-
-# Download, transform, and load all data (1980-2024)
-uv run download_and_load.py --transform --load
-
-# Load specific year
-uv run download_and_load.py --year 2020 --transform --load
-
-# Load year range
-uv run download_and_load.py --start-year 2016 --end-year 2024 --transform --load
-```
-
----
-
-## Usage
-
-### Full Pipeline
-
-The `download_and_load.py` script handles all three phases:
-
-```bash
-# Complete pipeline for all years
-uv run download_and_load.py --transform --load
-
-# Dry run (see what would be downloaded)
-uv run download_and_load.py --year 2020 --dry-run
-
-# Skip download, use existing files
-uv run download_and_load.py --skip-download --transform --load
-
-# Verbose output
-uv run download_and_load.py --transform --load --verbose
-```
-
-### Individual Phases
-
-You can also run each phase separately:
-
-**Transform Data**
-```bash
-uv run transform_politicians.py
-uv run transform_donors.py
-uv run transform_contributions.py
-```
-
-**Load Into Database**
-```bash
-uv run load_politicians.py
-uv run load_donors.py
-uv run load_contributions_optimized.py
-```
-
-**Create Indexes**
-```bash
-psql $DATABASE_URL -f create_indexes.sql
-psql $DATABASE_URL -f create_donation_summary_view.sql
-```
-
----
-
-## Database Schema
-
-The pipeline creates these core tables:
-
-- **`politicians`** - Federal legislators with biographical and ideological data
-- **`donors`** - Individual and organizational contributors
-- **`contributions`** - Campaign finance transactions
-
-And this materialized view:
-
-- **`canonical_politician_industry_summary`** - Pre-aggregated donation totals by politician and industry
+See `etl/README.md` for details on the transformation pipeline.
 
 ---
 
 ## Data Coverage
 
-### Campaign Contributions
-- **Years**: 1980-2024 (election years, biennial)
-- **Records**: ~290 million contributions
-- **Source**: DIME
+### Huggingface Dataset
 
-### Politicians
-- **Coverage**: Federal candidates who received contributions
-- **Includes**: NOMINATE scores, party, state, district
-- **Source**: DIME recipients data
+| Field | Coverage |
+|-------|----------|
+| **Years** | 1979-2024 |
+| **Records** | 915 million contributions |
+| **Size** | 58.5 GB (Parquet) |
+| **Columns** | 43 fields |
 
-### Donors
-- **Coverage**: Individual and organizational contributors
-- **Includes**: Donor type (individual/PAC), employer, occupation, industry classification
-- **Source**: DIME contributors data
+Key columns include:
+- Transaction info: `cycle`, `amount`, `date`, `transaction.id`
+- Contributor: `contributor.name`, `contributor.state`, `contributor.employer`, `contributor.cfscore`
+- Recipient: `recipient.name`, `recipient.party`, `recipient.state`, `candidate.cfscore`
 
----
-
-## Year Filtering
-
-Contribution data is available for election years only:
-
-```bash
-# Valid years: 1980, 1982, 1984, ..., 2022, 2024
-
-# Single year
-uv run download_and_load.py --year 2020 --transform --load
-
-# Year range
-uv run download_and_load.py --start-year 2016 --end-year 2024 --transform --load
-
-# All available years (default)
-uv run download_and_load.py --transform --load
-```
-
----
-
-## Performance
-
-Typical execution times (varies by system and network):
-
-| Phase | Time (Single Year) | Time (All Years) |
-|-------|-------------------|------------------|
-| Download | 5-10 minutes | 30-60 minutes |
-| Transform | 10-20 minutes | 60-90 minutes |
-| Load | 15-30 minutes | 120-180 minutes |
-| **Total** | **30-60 minutes** | **4-6 hours** |
-
-### Resource Requirements
-
-- **Disk Space**: ~3-4 GB per year, ~50 GB for full dataset
-- **Database Size**: ~25-30 GB for full data (1980-2024)
-- **Memory**: 8 GB RAM recommended for large loads
-
----
-
-## Troubleshooting
-
-### AWS Access Issues
-
-```bash
-# Verify credentials
-aws sts get-caller-identity
-
-# Test S3 bucket access
-aws s3 ls s3://paper-trail-dime/filtered-parquet/
-
-# Reconfigure if needed
-aws configure
-```
-
-### Database Connection Issues
-
-```bash
-# Test connection
-psql $DATABASE_URL -c "SELECT version();"
-
-# Verify environment variable
-echo $DATABASE_URL
-```
-
-### Disk Space Issues
-
-```bash
-# Check available space
-df -h .
-
-# Clear transformed data after loading
-rm -rf ../data/transformed/*.parquet
-```
-
-### Memory Issues
-
-For large loads, reduce batch sizes in load scripts:
-
-```python
-# In load_contributions_optimized.py
-BATCH_SIZE = 10000  # Reduce from default if needed
-```
+See [docs/QUICKSTART_DUCKDB.md](docs/QUICKSTART_DUCKDB.md) for the full column list.
 
 ---
 
 ## Project Structure
 
 ```
-.gitignore                             # Exclude data directories
+docs/
+├── RAW_DATA_CATALOG.md        # Data source documentation
+└── QUICKSTART_DUCKDB.md       # DuckDB loader guide
 
-database/
-└── schema.sql                         # Database schema
+scripts/
+├── duckdb_loader/             # Load HF data into DuckDB
+│   ├── duckdb_loader/
+│   │   ├── loader.py          # Core loading logic
+│   │   ├── filters.py         # Filter presets
+│   │   ├── schema.py          # DuckDB schema
+│   │   └── cli.py             # Command-line interface
+│   └── pyproject.toml
+│
+└── dime_converter/            # CSV to Parquet converter
+    └── ...
 
-etl/
-├── README.md                          # ETL documentation
-├── pyproject.toml                     # Python dependencies
-│
-├── download_and_load.py               # Unified pipeline script
-├── download_contributions.sh          # Download DIME data
-├── download_voteview.sh               # Download Voteview data
-│
-├── transform_politicians.py           # Transform legislators
-├── transform_donors.py                # Transform contributors
-├── transform_contributions.py         # Transform contributions
-│
-├── load_politicians.py                # Load politicians table
-├── load_donors.py                     # Load donors table
-├── load_contributions_optimized.py    # Load contributions table
-│
-├── create_indexes.sql                 # Database indexes
-├── create_donation_summary_view.sql   # Materialized view
-│
-└── utils/
-    └── normalization.py               # Data normalization utilities
+etl/                           # Reference: ETL pipeline scripts
+examples/                      # Usage examples
 ```
-
----
-
-## Getting AWS Access
-
-#### 🔜 *TBD*
 
 ---
 
