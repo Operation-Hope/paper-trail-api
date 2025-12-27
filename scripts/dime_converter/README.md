@@ -28,7 +28,9 @@ This allows converting files with 50M+ rows on modest hardware.
 
 ### Schema Preservation
 
-All 45 columns are converted with explicit PyArrow types to prevent data loss:
+The converter supports three DIME file types, each with explicit PyArrow types to prevent data loss.
+
+#### Contributions (45 columns)
 
 | Category | Columns | Type | Rationale |
 |----------|---------|------|-----------|
@@ -39,6 +41,28 @@ All 45 columns are converted with explicit PyArrow types to prevent data loss:
 | Flags | `cycle`, `excluded.from.scaling` | int32 | Integer values |
 | Scores | `contributor.cfscore`, `candidate.cfscore` | float64 | Decimal scores |
 | Text | All name, address, occupation fields | string | Preserve as-is |
+
+#### Recipients (66 columns)
+
+| Category | Columns | Type | Rationale |
+|----------|---------|------|-----------|
+| IDs | `bonica.rid`, `bonica.cid`, `ICPSR`, `FEC.ID`, `NID` | string | Preserve ID formats |
+| Names | `name`, `lname`, `fname`, `ffname` | string | Text fields |
+| Scores | `recipient.cfscore`, `dwnom1`, `dwnom2`, `composite.score` | float64 | Decimal scores |
+| Financial | `total.receipts`, `total.disbursements`, `total.indiv.contribs` | float64 | Monetary values |
+| Vote data | `prim.vote.pct`, `gen.vote.pct`, `district.pres.vs` | float64 | Percentages |
+| Metadata | `cycle`, `fecyear`, `num.givers` | float64 | Nullable integers |
+
+#### Contributors (43 columns)
+
+| Category | Columns | Type | Rationale |
+|----------|---------|------|-----------|
+| IDs | `bonica.cid`, `most.recent.transaction.id` | string | Preserve ID formats |
+| Codes | `most.recent.contributor.zipcode` | string | Preserve leading zeros |
+| Location | `most.recent.contributor.latitude`, `longitude` | float64 | Coordinates |
+| Scores | `contributor.cfscore` | float64 | Decimal scores |
+| Amounts | `amount.1980` through `amount.2024` (23 columns) | float64 | Per-cycle totals |
+| Metadata | `first_cycle_active`, `last_cycle_active`, `num.distinct` | float64 | Nullable integers |
 
 ### Compression
 
@@ -91,13 +115,56 @@ Sample comparison: PASS (1000 rows)
 | 2024 | 54,234,567 | 3.2GB | PASS |
 | **Total** | **870,058,414** | **52GB** | **All PASS** |
 
+## Output Dataset
+
+The converted Parquet files are available on Hugging Face:
+
+**https://huggingface.co/datasets/Dustinhax/tyt**
+
+### Directory Structure
+
+```
+dime/
+├── contributions/
+│   └── by_year/
+│       ├── contribDB_1980.parquet    (20.2 MB)
+│       ├── contribDB_1982.parquet    (11.6 MB)
+│       ├── contribDB_1984.parquet    (16.9 MB)
+│       ├── contribDB_1986.parquet    (18.7 MB)
+│       ├── contribDB_1988.parquet    (27.9 MB)
+│       ├── contribDB_1990.parquet    (51.9 MB)
+│       ├── contribDB_1992.parquet    (80.4 MB)
+│       ├── contribDB_1994.parquet    (105 MB)
+│       ├── contribDB_1996.parquet    (195 MB)
+│       ├── contribDB_1998.parquet    (393 MB)
+│       ├── contribDB_2000.parquet    (466 MB)
+│       ├── contribDB_2002.parquet    (760 MB)
+│       ├── contribDB_2004.parquet    (1.13 GB)
+│       ├── contribDB_2006.parquet    (1.42 GB)
+│       ├── contribDB_2008.parquet    (1.67 GB)
+│       ├── contribDB_2010.parquet    (1.7 GB)
+│       ├── contribDB_2012.parquet    (2.69 GB)
+│       ├── contribDB_2014.parquet    (2.28 GB)
+│       ├── contribDB_2016.parquet    (3.65 GB)
+│       ├── contribDB_2018.parquet    (3.04 GB)
+│       ├── contribDB_2020.parquet    (14.3 GB)
+│       ├── contribDB_2022.parquet    (8.91 GB)
+│       └── contribDB_2024.parquet    (13 GB)
+├── contributors/
+│   └── dime_contributors_1979_2024.parquet    (2.4 GB)
+└── recipients/
+    └── dime_recipients_all_1979_2024.parquet  (44.1 MB)
+```
+
+**Total size**: ~58.5 GB
+
 ## Usage
 
 ### CLI
 
 ```bash
 python -m dime_converter source.csv.gz output.parquet
-python -m dime_converter source.csv.gz output.parquet --batch-size 300000
+python -m dime_converter source.csv.gz output.parquet --batch-size 100000
 ```
 
 ### Programmatic
@@ -108,7 +175,7 @@ from dime_converter import convert_dime_file
 result = convert_dime_file(
     "contribDB_2024.csv.gz",
     "contribDB_2024.parquet",
-    batch_size=300_000,  # Rows per batch
+    batch_size=100_000,  # Rows per batch (default)
     sample_size=1000,    # Validation sample size
 )
 
@@ -134,6 +201,7 @@ The conversion scripts are located in `scripts/dime_converter/`:
 - `schema.py` - Column schema with explicit types
 - `exceptions.py` - Custom exception types
 - `cli.py` - Command-line interface
+- `__main__.py` - Module entry point for `python -m` invocation
 - `__init__.py` - Package exports
 
 ## Technical Notes
@@ -153,7 +221,7 @@ This ensures NaN values in the source are correctly represented as NULL in Parqu
 
 The streaming approach keeps memory usage constant regardless of file size:
 
-- Batches of 300,000 rows (configurable)
+- Batches of 100,000 rows (configurable)
 - Column-level Parquet reads during validation
 - No full table materialization
 
