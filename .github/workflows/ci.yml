@@ -22,7 +22,7 @@ jobs:
         run: uv python install 3.13
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --all-extras
 
       - name: Run Ruff linter
         run: uv run ruff check .
@@ -47,7 +47,7 @@ jobs:
         run: uv python install 3.13
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --all-extras
 
       - name: Run ty type checker
         run: uv run ty check duckdb_loader/ || echo "Type checking found issues (informational)"
@@ -67,7 +67,7 @@ jobs:
         run: uv python install 3.13
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --all-extras
 
       - name: Install duckdb-loader package
         run: uv pip install -e duckdb_loader/
