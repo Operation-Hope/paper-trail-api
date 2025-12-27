@@ -22,6 +22,7 @@ from .exceptions import (
     AggregationError,
     CompletenessError,
     DistinctLegislatorsError,
+    InvalidSourceURLError,
     OutputWriteError,
     SampleValidationError,
     SourceReadError,
@@ -50,6 +51,7 @@ __all__ = [
     "VOTEVIEW_MEMBERS_URL",
     # Exceptions
     "DistinctLegislatorsError",
+    "InvalidSourceURLError",
     "SourceReadError",
     "CompletenessError",
     "AggregationError",

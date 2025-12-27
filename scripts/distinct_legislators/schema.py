@@ -10,6 +10,27 @@ import pyarrow as pa
 HF_BASE_URL = "https://huggingface.co/datasets/Dustinhax/tyt/resolve/main"
 VOTEVIEW_MEMBERS_URL = f"{HF_BASE_URL}/voteview/HSall_members.parquet"
 
+# Allowed domains for source URLs (SQL injection mitigation)
+ALLOWED_SOURCE_DOMAINS = [
+    "huggingface.co",
+]
+
+
+def validate_source_url(url: str) -> bool:
+    """Check if source URL is from an allowed domain.
+
+    Args:
+        url: The URL to validate
+
+    Returns:
+        True if URL is from an allowed domain
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    return any(parsed.netloc.endswith(domain) for domain in ALLOWED_SOURCE_DOMAINS)
+
+
 # Congress filter: 96th congress (1979-1980) and later
 # Congress 96 started January 3, 1979
 MIN_CONGRESS = 96

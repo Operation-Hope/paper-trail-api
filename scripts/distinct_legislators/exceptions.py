@@ -91,3 +91,15 @@ class OutputWriteError(DistinctLegislatorsError):
 
     def __str__(self) -> str:
         return f"Failed to write output: {self.output_path}\n{self.message}"
+
+
+@dataclass
+class InvalidSourceURLError(DistinctLegislatorsError):
+    """Raised when source URL is not from an allowed domain."""
+
+    source_url: str
+    allowed_domains: list[str]
+
+    def __str__(self) -> str:
+        domains = ", ".join(self.allowed_domains)
+        return f"Invalid source URL: {self.source_url}\nAllowed domains: {domains}"

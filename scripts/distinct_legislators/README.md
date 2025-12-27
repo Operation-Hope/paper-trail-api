@@ -39,6 +39,9 @@ python -m distinct_legislators legislators.parquet --no-validate
 
 # Custom sample sizes for validation
 python -m distinct_legislators legislators.parquet --aggregation-sample 200 --deep-sample 100
+
+# Reproducible validation with fixed random seed
+python -m distinct_legislators legislators.parquet --seed 42
 ```
 
 ### Python API

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import random
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -58,11 +59,23 @@ Examples:
         default=50,
         help="Sample size for deep validation (default: 50)",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for reproducible validation sampling",
+    )
 
     args = parser.parse_args()
 
+    # Set random seed for reproducible validation
+    if args.seed is not None:
+        random.seed(args.seed)
+
     print(f"[{datetime.now().isoformat()}] Extracting distinct legislators")
     print(f"  Min congress: {args.min_congress}")
+    if args.seed is not None:
+        print(f"  Random seed: {args.seed}")
 
     try:
         result = extract_distinct_legislators(

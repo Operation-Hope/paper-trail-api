@@ -7,11 +7,13 @@ from pathlib import Path
 
 import duckdb
 
-from .exceptions import OutputWriteError, SourceReadError
+from .exceptions import InvalidSourceURLError, OutputWriteError, SourceReadError
 from .schema import (
     AGGREGATION_QUERY,
+    ALLOWED_SOURCE_DOMAINS,
     MIN_CONGRESS,
     VOTEVIEW_MEMBERS_URL,
+    validate_source_url,
 )
 from .validators import (
     ValidationResult,
@@ -59,6 +61,7 @@ def extract_distinct_legislators(
         ExtractionResult with extraction details and validation results
 
     Raises:
+        InvalidSourceURLError: If source URL is not from an allowed domain
         SourceReadError: If source data cannot be read
         CompletenessError: If Tier 1 validation fails
         AggregationError: If Tier 2 validation fails
@@ -66,6 +69,15 @@ def extract_distinct_legislators(
         OutputWriteError: If output cannot be written
     """
     output_path = Path(output_path)
+
+    # Validate source URL to prevent SQL injection
+    if not validate_source_url(source_url):
+        raise InvalidSourceURLError(
+            message="Source URL must be from an allowed domain",
+            source_url=source_url,
+            allowed_domains=ALLOWED_SOURCE_DOMAINS,
+        )
+
     conn = duckdb.connect()
 
     try:
@@ -98,7 +110,7 @@ def extract_distinct_legislators(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             conn.execute(f"""
                 COPY ({query})
-                TO '{output_path}' (FORMAT PARQUET, COMPRESSION ZSTD)
+                TO '{output_path}' (FORMAT PARQUET, COMPRESSION ZSTD, COMPRESSION_LEVEL 3)
             """)
         except Exception as e:
             raise OutputWriteError(
@@ -118,7 +130,7 @@ def extract_distinct_legislators(
             print("Validating...")
 
             # Tier 1: Completeness
-            validation = validate_completeness(source_url, output_path, conn)
+            validation = validate_completeness(source_url, output_path, conn, min_congress)
             print(f"  Tier 1 (Completeness): PASS ({validation.output_count:,} legislators)")
 
             # Tier 2: Aggregation Integrity
@@ -127,6 +139,7 @@ def extract_distinct_legislators(
                 output_path,
                 conn,
                 validation,
+                min_congress,
                 sample_size=aggregation_sample_size,
             )
             print(f"  Tier 2 (Aggregation): PASS ({validation.aggregation_checks_passed} checks)")
@@ -137,6 +150,7 @@ def extract_distinct_legislators(
                 output_path,
                 conn,
                 validation,
+                min_congress,
                 sample_size=deep_sample_size,
             )
             print(f"  Tier 3 (Sample): PASS ({validation.sample_size} legislators verified)")

@@ -23,7 +23,6 @@ from .exceptions import (
     CompletenessError,
     SampleValidationError,
 )
-from .schema import MIN_CONGRESS
 
 
 @dataclass
@@ -50,6 +49,7 @@ def validate_completeness(
     source_url: str,
     output_path: Path,
     conn: duckdb.DuckDBPyConnection,
+    min_congress: int,
 ) -> ValidationResult:
     """
     Tier 1: Verify all source bioguide_ids appear exactly once in output.
@@ -66,7 +66,7 @@ def validate_completeness(
     source_count = conn.execute(f"""
         SELECT COUNT(DISTINCT bioguide_id)
         FROM read_parquet('{source_url}')
-        WHERE congress >= {MIN_CONGRESS}
+        WHERE congress >= {min_congress}
           AND bioguide_id IS NOT NULL
     """).fetchone()[0]
     result.source_distinct_count = source_count
@@ -101,7 +101,7 @@ def validate_completeness(
             SELECT bioguide_id FROM (
                 SELECT DISTINCT bioguide_id
                 FROM read_parquet('{source_url}')
-                WHERE congress >= {MIN_CONGRESS}
+                WHERE congress >= {min_congress}
                   AND bioguide_id IS NOT NULL
             ) source
             WHERE bioguide_id NOT IN (
@@ -116,7 +116,7 @@ def validate_completeness(
             WHERE bioguide_id NOT IN (
                 SELECT DISTINCT bioguide_id
                 FROM read_parquet('{source_url}')
-                WHERE congress >= {MIN_CONGRESS}
+                WHERE congress >= {min_congress}
                   AND bioguide_id IS NOT NULL
             )
             LIMIT 10
@@ -140,6 +140,7 @@ def validate_aggregation(
     output_path: Path,
     conn: duckdb.DuckDBPyConnection,
     result: ValidationResult,
+    min_congress: int,
     sample_size: int = 100,
 ) -> ValidationResult:
     """
@@ -170,7 +171,7 @@ def validate_aggregation(
                 COUNT(*) as expected_count
             FROM read_parquet('{source_url}')
             WHERE bioguide_id = '{bioguide_id}'
-              AND congress >= {MIN_CONGRESS}
+              AND congress >= {min_congress}
         """).fetchone()
 
         expected_first, expected_last, expected_count = source_data
@@ -229,6 +230,7 @@ def validate_sample(
     output_path: Path,
     conn: duckdb.DuckDBPyConnection,
     result: ValidationResult,
+    min_congress: int,
     sample_size: int = 50,
 ) -> ValidationResult:
     """
@@ -255,7 +257,7 @@ def validate_sample(
             SELECT LIST(congress ORDER BY congress)
             FROM read_parquet('{source_url}')
             WHERE bioguide_id = '{bioguide_id}'
-              AND congress >= {MIN_CONGRESS}
+              AND congress >= {min_congress}
         """).fetchone()[0]
 
         # Get actual congresses from output
@@ -281,7 +283,7 @@ def validate_sample(
             SELECT bioname, state_abbrev
             FROM read_parquet('{source_url}')
             WHERE bioguide_id = '{bioguide_id}'
-              AND congress >= {MIN_CONGRESS}
+              AND congress >= {min_congress}
             ORDER BY congress DESC
             LIMIT 1
         """).fetchone()
