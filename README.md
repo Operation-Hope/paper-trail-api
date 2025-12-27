@@ -52,7 +52,7 @@ result = load_to_duckdb(
 print(f"Loaded {result.rows_loaded:,} rows")
 ```
 
-See **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)** for full documentation.
+See **[duckdb_loader/README.md](duckdb_loader/README.md)** for full documentation.
 
 ---
 
@@ -145,7 +145,7 @@ Key columns include:
 - Contributor: `contributor.name`, `contributor.state`, `contributor.employer`, `contributor.cfscore`
 - Recipient: `recipient.name`, `recipient.party`, `recipient.state`, `candidate.cfscore`
 
-See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for the full column list.
+See [duckdb_loader/README.md](duckdb_loader/README.md) for the full column list.
 
 ---
 
@@ -153,6 +153,7 @@ See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for the full column l
 
 ```
 duckdb_loader/                 # Load HF data into DuckDB or PostgreSQL
+├── README.md                  # Usage documentation
 ├── duckdb_loader/
 │   ├── loader.py              # DuckDB loading logic
 │   ├── postgres_loader.py     # PostgreSQL loading logic
@@ -162,8 +163,7 @@ duckdb_loader/                 # Load HF data into DuckDB or PostgreSQL
 └── pyproject.toml
 
 docs/
-├── RAW_DATA_CATALOG.md        # Data source documentation
-└── LOCAL_DEVELOPMENT.md       # Local development guide
+└── RAW_DATA_CATALOG.md        # Data source documentation
 
 scripts/
 └── dime_converter/            # CSV to Parquet converter (one-time use)
