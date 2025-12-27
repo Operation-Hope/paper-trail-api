@@ -5,6 +5,10 @@ then batch-inserts into PostgreSQL.
 """
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from typing import LiteralString
 
 import duckdb
 import psycopg
@@ -88,18 +92,14 @@ def _create_postgres_schema(
     columns: list[str],
 ) -> None:
     """Create the contributions table in PostgreSQL."""
-    col_defs = []
-    for col in columns:
-        pg_name = _sanitize_column_name(col)
-        pg_type = _get_postgres_column_type(col)
-        col_defs.append(f'"{pg_name}" {pg_type}')
-
-    create_sql = f"""
-        CREATE TABLE IF NOT EXISTS {table_name} (
-            id SERIAL PRIMARY KEY,
-            {", ".join(col_defs)}
-        )
-    """
+    # Build column definitions as raw SQL string (types are from fixed map, safe to cast)
+    col_defs_str = ", ".join(
+        f'"{_sanitize_column_name(col)}" {_get_postgres_column_type(col)}' for col in columns
+    )
+    # Use sql.SQL for the dynamic parts
+    create_sql = sql.SQL("CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY, {})").format(
+        sql.Identifier(table_name), sql.SQL(cast("LiteralString", col_defs_str))
+    )
     conn.execute(create_sql)
     conn.commit()
 
@@ -118,7 +118,12 @@ def _create_postgres_indexes(conn: psycopg.Connection, table_name: str) -> None:
 
     for idx_name, col in indexes:
         try:
-            conn.execute(f'CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} ("{col}")')
+            create_idx_sql = sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} ({})").format(
+                sql.Identifier(idx_name),
+                sql.Identifier(table_name),
+                sql.Identifier(col),
+            )
+            conn.execute(create_idx_sql)
         except Exception:
             # Column may not exist
             pass
@@ -257,7 +262,7 @@ def load_to_postgres(
 
     finally:
         duck_conn.close()
-        if show_progress and hasattr(cycles_to_process, "close"):
+        if show_progress and isinstance(cycles_to_process, tqdm):
             cycles_to_process.close()
 
     # Create indexes
@@ -290,8 +295,10 @@ def get_postgres_table_info(database_url: str, table_name: str = "contributions"
     conn = psycopg.connect(database_url)
     try:
         with conn.cursor() as cur:
-            cur.execute(f"SELECT COUNT(*) FROM {table_name}")
-            row_count = cur.fetchone()[0]
+            count_sql = sql.SQL("SELECT COUNT(*) FROM {}").format(sql.Identifier(table_name))
+            cur.execute(count_sql)
+            result = cur.fetchone()
+            row_count = result[0] if result else 0
 
             cur.execute(
                 """
