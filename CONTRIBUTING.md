@@ -22,7 +22,7 @@ Thank you for your interest in contributing to Paper Trail API! This document pr
    ```bash
    uv venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   uv sync --dev
+   uv sync --all-extras
    ```
 
 3. **Install the duckdb-loader package in development mode**

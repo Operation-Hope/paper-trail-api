@@ -1,9 +1,6 @@
 """Tests for filter implementations."""
 
-import sys
 from datetime import date
-
-sys.path.insert(0, str(__file__).rsplit("/", 2)[0] + "/duckdb_loader")
 
 from duckdb_loader.filters import (
     AmountFilter,
