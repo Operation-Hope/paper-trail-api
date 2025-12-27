@@ -7,7 +7,7 @@ This script demonstrates how to:
 3. Query the resulting DuckDB database
 
 Prerequisites:
-    cd scripts/duckdb_loader
+    cd duckdb_loader
     uv pip install -e .
 
 Usage:

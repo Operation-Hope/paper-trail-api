@@ -26,7 +26,7 @@ The DIME campaign finance dataset is available on Huggingface:
 
 ```bash
 # Install the loader
-cd scripts/duckdb_loader
+cd duckdb_loader
 uv pip install -e .
 
 # Load into DuckDB (quick analysis)
@@ -152,22 +152,21 @@ See [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) for the full column l
 ## Project Structure
 
 ```
+duckdb_loader/                 # Load HF data into DuckDB or PostgreSQL
+├── duckdb_loader/
+│   ├── loader.py              # DuckDB loading logic
+│   ├── postgres_loader.py     # PostgreSQL loading logic
+│   ├── filters.py             # Filter presets
+│   ├── schema.py              # Schema definitions
+│   └── cli.py                 # Command-line interface
+└── pyproject.toml
+
 docs/
 ├── RAW_DATA_CATALOG.md        # Data source documentation
 └── LOCAL_DEVELOPMENT.md       # Local development guide
 
 scripts/
-├── duckdb_loader/             # Load HF data into DuckDB or PostgreSQL
-│   ├── duckdb_loader/
-│   │   ├── loader.py          # DuckDB loading logic
-│   │   ├── postgres_loader.py # PostgreSQL loading logic
-│   │   ├── filters.py         # Filter presets
-│   │   ├── schema.py          # Schema definitions
-│   │   └── cli.py             # Command-line interface
-│   └── pyproject.toml
-│
-└── dime_converter/            # CSV to Parquet converter
-    └── ...
+└── dime_converter/            # CSV to Parquet converter (one-time use)
 
 examples/                      # Usage examples
 ```

@@ -11,7 +11,7 @@ This guide shows how to load the [DIME campaign finance dataset](https://hugging
 ## Installation
 
 ```bash
-cd scripts/duckdb_loader
+cd duckdb_loader
 uv pip install -e .
 ```
 

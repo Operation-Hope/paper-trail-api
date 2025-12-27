@@ -4,7 +4,7 @@ This document describes the lossless conversion of DIME (Database on Ideology, M
 
 ## Overview
 
-The DIME contributions dataset contains approximately **870 million rows** of campaign finance records spanning 1980-2024. The original CSV.gz files (89GB compressed) have been converted to Parquet format (52GB) for faster query performance while ensuring complete data fidelity.
+The [DIME](https://data.stanford.edu/dime) contributions dataset contains approximately **870 million rows** of campaign finance records spanning 1980-2024. The original CSV.gz files (89GB compressed) have been converted to Parquet format (52GB) for faster query performance while ensuring complete data fidelity.
 
 ## Source Data
 
