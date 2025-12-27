@@ -152,23 +152,24 @@ See [duckdb_loader/README.md](duckdb_loader/README.md) for the full column list.
 ## Project Structure
 
 ```
-duckdb_loader/                 # Load HF data into DuckDB or PostgreSQL
-├── README.md                  # Usage documentation
-├── duckdb_loader/
-│   ├── loader.py              # DuckDB loading logic
-│   ├── postgres_loader.py     # PostgreSQL loading logic
-│   ├── filters.py             # Filter presets
-│   ├── schema.py              # Schema definitions
-│   └── cli.py                 # Command-line interface
-└── pyproject.toml
-
-docs/
-└── RAW_DATA_CATALOG.md        # Data source documentation
-
-scripts/
-└── dime_converter/            # CSV to Parquet converter (one-time use)
-
-examples/                      # Usage examples
+paper-trail-api/
+├── pyproject.toml             # Root config (dev tools, workspace)
+├── CONTRIBUTING.md            # Contributor guidelines
+├── .github/workflows/         # CI pipeline
+│
+├── duckdb_loader/             # Main package - HF data loader
+│   ├── README.md              # Usage documentation
+│   └── duckdb_loader/
+│       ├── loader.py          # DuckDB loading logic
+│       ├── postgres_loader.py # PostgreSQL loading logic
+│       ├── filters.py         # Filter presets
+│       ├── schema.py          # Schema definitions
+│       └── cli.py             # Command-line interface
+│
+├── tests/                     # Test suite (pytest)
+├── docs/                      # Data source documentation
+├── scripts/                   # Utility scripts
+└── examples/                  # Usage examples
 ```
 
 ---
@@ -185,9 +186,24 @@ We welcome contributions! Here's how:
 6. Push to branch (`git push origin feature/improvement`)
 7. Open a Pull Request
 
-### Development Guidelines
+### Development Setup
 
-#### 🔜 *TBD*
+```bash
+# Clone and install
+git clone https://github.com/Operation-Hope/paper-trail-api.git
+cd paper-trail-api
+uv sync --all-extras
+
+# Set up pre-commit hooks
+uv run pre-commit install
+
+# Run checks
+uv run pytest tests/ -v      # Tests
+uv run ruff check .          # Linting
+uv run ruff format .         # Formatting
+```
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for full guidelines.
 
 ---
 

@@ -196,6 +196,7 @@ def single_state(state: str, include_recipients: bool = True) -> Filter:
     filters = [StateFilter(states=[state.upper()], field="contributor.state")]
     if include_recipients:
         filters.append(StateFilter(states=[state.upper()], field="recipient.state"))
+
         # Return rows matching either filter
         @dataclass
         class OrFilter(Filter):

@@ -82,7 +82,9 @@ ALL_COLUMNS: Final[list[str]] = [
 ]
 
 
-def create_schema(conn, table_name: str = "contributions", columns: list[str] | None = None) -> None:
+def create_schema(
+    conn, table_name: str = "contributions", columns: list[str] | None = None
+) -> None:
     """Create the contributions table schema in DuckDB.
 
     Args:
@@ -101,7 +103,7 @@ def create_schema(conn, table_name: str = "contributions", columns: list[str] | 
 
     create_sql = f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
-            {', '.join(col_defs)}
+            {", ".join(col_defs)}
         )
     """
     conn.execute(create_sql)

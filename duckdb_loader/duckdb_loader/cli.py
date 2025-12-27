@@ -4,7 +4,7 @@ import click
 
 from .filters import AmountFilter, CycleFilter, StateFilter, recent_cycles
 from .loader import get_table_info, load_to_duckdb, query_database
-from .postgres_loader import get_postgres_table_info, load_to_postgres
+from .postgres_loader import load_to_postgres
 
 
 @click.group()

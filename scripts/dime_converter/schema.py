@@ -22,13 +22,11 @@ DIME_CONTRIBUTIONS_SCHEMA: dict[str, pa.DataType] = {
     # Integer columns
     "cycle": pa.int32(),
     "excluded.from.scaling": pa.int32(),  # 0/1 flag
-
     # Float columns
     "amount": pa.float64(),
     "gis.confidence": pa.float64(),
     "contributor.cfscore": pa.float64(),
     "candidate.cfscore": pa.float64(),
-
     # String columns (all IDs, codes, and text fields)
     "transaction.id": pa.string(),
     "transaction.type": pa.string(),
