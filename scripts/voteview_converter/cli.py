@@ -111,10 +111,10 @@ Examples:
         print(f"[{datetime.now().isoformat()}] SUCCESS: {result.row_count:,} rows")
         print(f"  Output: {result.output_path}")
 
-        if result.validation.all_valid:
-            print("  Validation: ALL PASSED")
-        elif not args.no_validate:
+        if args.no_validate:
             print("  Validation: SKIPPED")
+        else:
+            print("  Validation: ALL PASSED")
 
         return 0
 

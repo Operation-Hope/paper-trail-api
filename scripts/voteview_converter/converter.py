@@ -88,8 +88,7 @@ def convert_voteview_file(
     print(f"  Written {stats.row_count:,} rows to {output_path}")
 
     # Step 3: Validate schema
-    if stats.schema is not None:
-        _validate_schema(source_path, stats.schema, config)
+    _validate_schema(source_path, stats.schema, config)
 
     # Step 4: Validate output
     validation_result = ValidationResult()
