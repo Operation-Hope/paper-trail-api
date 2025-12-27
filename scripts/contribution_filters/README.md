@@ -84,15 +84,22 @@ SELECT
     "candidate.cfscore",
     SUM(amount) as total_amount,
     AVG(amount) as avg_amount,
-    COUNT(*) as contribution_count
+    COUNT(*) as contribution_count,
+    -- Individual contributor breakdown
+    SUM(CASE WHEN "contributor.type" = 'I' THEN amount ELSE 0 END) as individual_total,
+    SUM(CASE WHEN "contributor.type" = 'I' THEN 1 ELSE 0 END) as individual_count,
+    -- Non-individual contributor breakdown
+    SUM(CASE WHEN "contributor.type" != 'I' THEN amount ELSE 0 END) as non_individual_total,
+    SUM(CASE WHEN "contributor.type" != 'I' THEN 1 ELSE 0 END) as non_individual_count
 FROM source
+-- Defensive: all DIME records have bonica.rid, but guard against future edge cases
 WHERE "bonica.rid" IS NOT NULL
 GROUP BY "bonica.rid", "recipient.name", "recipient.party",
          "recipient.type", "recipient.state", "candidate.cfscore"
 ORDER BY total_amount DESC
 ```
 
-**Output Schema** (9 columns):
+**Output Schema** (13 columns):
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -105,6 +112,10 @@ ORDER BY total_amount DESC
 | `total_amount` | float64 | Sum of all contributions |
 | `avg_amount` | float64 | Average contribution size |
 | `contribution_count` | int64 | Number of contributions |
+| `individual_total` | float64 | Sum from individual contributors |
+| `individual_count` | int64 | Count from individual contributors |
+| `non_individual_total` | float64 | Sum from PACs, corps, committees |
+| `non_individual_count` | int64 | Count from PACs, corps, committees |
 
 ## Validation Suite
 

@@ -67,6 +67,7 @@ WHERE "contributor.type" != 'I'
 
 # Recipient aggregates
 # Groups by recipient and calculates total/average contribution amounts
+# Includes breakdowns by contributor type (individual vs non-individual)
 RECIPIENT_AGGREGATES_QUERY = """
 SELECT
     "bonica.rid",
@@ -77,8 +78,17 @@ SELECT
     "candidate.cfscore",
     SUM(amount) as total_amount,
     AVG(amount) as avg_amount,
-    COUNT(*) as contribution_count
+    COUNT(*) as contribution_count,
+    -- Individual contributor breakdown (contributor.type = 'I')
+    SUM(CASE WHEN "contributor.type" = 'I' THEN amount ELSE 0 END) as individual_total,
+    SUM(CASE WHEN "contributor.type" = 'I' THEN 1 ELSE 0 END) as individual_count,
+    -- Non-individual contributor breakdown (PACs, corporations, committees, etc.)
+    SUM(CASE WHEN "contributor.type" != 'I' AND "contributor.type" IS NOT NULL
+        THEN amount ELSE 0 END) as non_individual_total,
+    SUM(CASE WHEN "contributor.type" != 'I' AND "contributor.type" IS NOT NULL
+        THEN 1 ELSE 0 END) as non_individual_count
 FROM read_parquet('{source_url}')
+-- Defensive: all DIME records have bonica.rid, but guard against future edge cases
 WHERE "bonica.rid" IS NOT NULL
 GROUP BY
     "bonica.rid",
@@ -105,6 +115,10 @@ RECIPIENT_AGGREGATES_SCHEMA = pa.schema(
         pa.field("total_amount", pa.float64()),
         pa.field("avg_amount", pa.float64()),
         pa.field("contribution_count", pa.int64()),
+        pa.field("individual_total", pa.float64()),
+        pa.field("individual_count", pa.int64()),
+        pa.field("non_individual_total", pa.float64()),
+        pa.field("non_individual_count", pa.int64()),
     ]
 )
 
@@ -118,6 +132,10 @@ RECIPIENT_AGGREGATES_COLUMNS = [
     "total_amount",
     "avg_amount",
     "contribution_count",
+    "individual_total",
+    "individual_count",
+    "non_individual_total",
+    "non_individual_count",
 ]
 
 # =============================================================================
