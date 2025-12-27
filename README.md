@@ -69,13 +69,19 @@ This repository provides:
 - Campaign contributions (1979-2024) - 915 million transaction records
 - Politicians/Recipients - Federal candidates who received contributions
 - Donors/Contributors - Individuals and organizations making contributions
-- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/tyt/dime)
+- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/dime)
 
 **Voteview** (Congressional Roll-Call Voting)
 - Roll call voting records (1789-present) - 26M individual vote records
 - Congressional member info with NOMINATE ideology scores - 51K members
 - Roll call metadata with vote descriptions - 113K roll calls
-- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/tyt/voteview)
+- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/voteview)
+
+**United States Congress Legislators**
+- Currently serving legislators - 540 members
+- Historical legislators (all time) - 12,222 members
+- Cross-reference IDs: bioguide_id, icpsr_id (links to Voteview)
+- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/unitedstates_congress_github)
 
 #### Coming Soon
 
@@ -110,6 +116,7 @@ Data sources explored but not yet integrated:
 - **LDA LD-203** - Lobbying contribution reports
 - **SEC** - CIK/Ticker reference data
 - **GLEIF LEI** - Legal Entity Identifier (CC0)
+- **United States Congress Legislators** - [github.com/unitedstates/congress-legislators](https://github.com/unitedstates/congress-legislators)
 
 ### Open License (Non-Commercial)
 - **Voteview** - CC BY-NC 4.0 (attribution required, non-commercial only)
