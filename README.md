@@ -16,11 +16,16 @@
 
 The DIME campaign finance dataset is available on Huggingface:
 
-**[📊 Dustinhax/tyt on Huggingface](https://huggingface.co/datasets/Dustinhax/tyt)**
+**[📊 Dustinhax/tyt on Huggingface](https://huggingface.co/datasets/Dustinhax/tyt)** (raw data)
 
 - **915 million** contribution records (1979-2024)
 - **58.5 GB** in Parquet format
 - **43 columns** including contributor/recipient info, amounts, ideology scores
+
+**[📊 Dustinhax/paper-trail-data on Huggingface](https://huggingface.co/datasets/Dustinhax/paper-trail-data)** (processed data)
+
+- Transformed/filtered datasets ready for database population
+- `distinct_legislators.parquet` - 2,303 legislators (1979-present)
 
 ### Load into DuckDB or PostgreSQL
 
