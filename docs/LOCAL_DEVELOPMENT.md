@@ -2,8 +2,6 @@
 
 This guide shows how to load the [DIME campaign finance dataset](https://huggingface.co/datasets/Dustinhax/tyt) from Huggingface into a local database for development and analysis.
 
-**No AWS credentials required** - data streams directly from Huggingface.
-
 ## Dataset Overview
 
 - **915 million** contribution records (1979-2024)
