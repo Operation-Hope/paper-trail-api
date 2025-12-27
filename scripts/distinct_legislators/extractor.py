@@ -119,7 +119,7 @@ def extract_distinct_legislators(
 
             # Tier 1: Completeness
             validation = validate_completeness(source_url, output_path, conn)
-            print(f"  Tier 1 (Completeness): PASS " f"({validation.output_count:,} legislators)")
+            print(f"  Tier 1 (Completeness): PASS ({validation.output_count:,} legislators)")
 
             # Tier 2: Aggregation Integrity
             validation = validate_aggregation(
@@ -129,9 +129,7 @@ def extract_distinct_legislators(
                 validation,
                 sample_size=aggregation_sample_size,
             )
-            print(
-                f"  Tier 2 (Aggregation): PASS " f"({validation.aggregation_checks_passed} checks)"
-            )
+            print(f"  Tier 2 (Aggregation): PASS ({validation.aggregation_checks_passed} checks)")
 
             # Tier 3: Sample Verification
             validation = validate_sample(
@@ -141,7 +139,7 @@ def extract_distinct_legislators(
                 validation,
                 sample_size=deep_sample_size,
             )
-            print(f"  Tier 3 (Sample): PASS " f"({validation.sample_size} legislators verified)")
+            print(f"  Tier 3 (Sample): PASS ({validation.sample_size} legislators verified)")
 
         return ExtractionResult(
             source_url=source_url,
