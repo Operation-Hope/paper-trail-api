@@ -19,14 +19,14 @@ from .schema import (
     CONTRIBUTIONS_URL_TEMPLATE,
     MAX_CYCLE,
     MIN_CYCLE,
-    NON_INDIVIDUAL_QUERY,
+    ORGANIZATIONAL_QUERY,
     RECIPIENT_AGGREGATES_QUERY,
     validate_cycle,
     validate_source_url,
 )
 from .validators import (
     ValidationResult,
-    validate_non_individual_output,
+    validate_organizational_output,
     validate_recipient_aggregates,
 )
 
@@ -34,7 +34,7 @@ from .validators import (
 class OutputType(Enum):
     """Output types for contribution filtering."""
 
-    NON_INDIVIDUAL = "non_individual"
+    ORGANIZATIONAL = "organizational"
     RECIPIENT_AGGREGATES = "recipient_aggregates"
 
 
@@ -51,7 +51,7 @@ class ExtractionResult:
     validation: ValidationResult
 
 
-def extract_non_individual_contributions(
+def extract_organizational_contributions(
     output_path: Path | str,
     cycle: int,
     *,
@@ -59,10 +59,10 @@ def extract_non_individual_contributions(
     validate: bool = True,
 ) -> ExtractionResult:
     """
-    Extract non-individual contributions for a given cycle.
+    Extract organizational contributions for a given cycle.
 
     Filters out individual contributors (contributor.type = 'I'),
-    keeping only committees, corporations, and other entities.
+    keeping only PACs, corporations, committees, unions, and other organizations.
 
     Args:
         output_path: Path for output .parquet file
@@ -120,8 +120,8 @@ def extract_non_individual_contributions(
         print(f"  Source rows: {source_rows:,}")
 
         # Step 2: Execute filter query and write
-        print("Filtering non-individual contributions...")
-        query = NON_INDIVIDUAL_QUERY.format(source_url=source_url)
+        print("Filtering organizational contributions...")
+        query = ORGANIZATIONAL_QUERY.format(source_url=source_url)
 
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -139,14 +139,14 @@ def extract_non_individual_contributions(
         output_count = conn.execute(f"""
             SELECT COUNT(*) FROM read_parquet('{output_path}')
         """).fetchone()[0]
-        print(f"  Non-individual contributions: {output_count:,}")
+        print(f"  Organizational contributions: {output_count:,}")
         print(f"  Filtered out: {source_rows - output_count:,} individual contributions")
 
         # Step 4: Validate
         validation = ValidationResult()
         if validate:
             print("Validating...")
-            validation = validate_non_individual_output(
+            validation = validate_organizational_output(
                 source_url, output_path, conn, source_rows, output_count
             )
             print("  Validation: PASS")
@@ -155,7 +155,7 @@ def extract_non_individual_contributions(
             source_url=source_url,
             output_path=output_path,
             cycle=cycle,
-            output_type=OutputType.NON_INDIVIDUAL,
+            output_type=OutputType.ORGANIZATIONAL,
             source_rows=source_rows,
             output_count=output_count,
             validation=validation,

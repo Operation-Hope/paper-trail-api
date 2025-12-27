@@ -42,7 +42,7 @@ class ValidationResult:
         return self.row_count_valid and (self.filter_valid or self.aggregation_valid)
 
 
-def validate_non_individual_output(
+def validate_organizational_output(
     source_url: str,
     output_path: Path,
     conn: duckdb.DuckDBPyConnection,
@@ -50,7 +50,7 @@ def validate_non_individual_output(
     output_count: int,
 ) -> ValidationResult:
     """
-    Validate non-individual filter output.
+    Validate organizational filter output.
 
     Checks:
     - Output count is less than source (filter reduced rows)

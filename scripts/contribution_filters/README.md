@@ -6,7 +6,7 @@ This document describes the extraction of filtered contribution datasets from DI
 
 The contribution filters module extracts two specialized datasets from the DIME contributions data:
 
-1. **Non-Individual Contributions**: Filters out individual contributors, keeping only committees, corporations, PACs, and other organizational entities
+1. **Organizational Contributions**: Filters out individual contributors, keeping only committees, corporations, PACs, and other organizational entities
 2. **Recipient Aggregates**: Groups contributions by recipient ID with summary statistics
 
 Both outputs span 23 election cycles (1980-2024) and are validated for correctness before publishing.
@@ -26,7 +26,7 @@ Both outputs span 23 election cycles (1980-2024) and are validated for correctne
 The extraction uses DuckDB's `read_parquet()` for remote streaming queries, avoiding the need to download source files:
 
 ```sql
--- Non-individual filter
+-- Organizational filter
 COPY (
     SELECT *
     FROM read_parquet('https://huggingface.co/.../contribDB_2024.parquet')
@@ -47,7 +47,7 @@ This approach:
 
 ## Output Types
 
-### Non-Individual Contributions
+### Organizational Contributions
 
 Filters contributions to exclude individual contributors (`contributor.type = 'I'`).
 
@@ -67,7 +67,7 @@ WHERE "contributor.type" != 'I'
 
 **Output Schema**: Same as source contributions (45 columns)
 
-**Typical Reduction**: 15-25% of source rows retained (individual contributions are the majority)
+**Typical Reduction**: 15-25% of source rows retained (organizational contributions are a minority)
 
 ### Recipient Aggregates
 
@@ -88,9 +88,9 @@ SELECT
     -- Individual contributor breakdown
     SUM(CASE WHEN "contributor.type" = 'I' THEN amount ELSE 0 END) as individual_total,
     SUM(CASE WHEN "contributor.type" = 'I' THEN 1 ELSE 0 END) as individual_count,
-    -- Non-individual contributor breakdown
-    SUM(CASE WHEN "contributor.type" != 'I' THEN amount ELSE 0 END) as non_individual_total,
-    SUM(CASE WHEN "contributor.type" != 'I' THEN 1 ELSE 0 END) as non_individual_count
+    -- Organizational contributor breakdown
+    SUM(CASE WHEN "contributor.type" != 'I' THEN amount ELSE 0 END) as organizational_total,
+    SUM(CASE WHEN "contributor.type" != 'I' THEN 1 ELSE 0 END) as organizational_count
 FROM source
 -- Defensive: all DIME records have bonica.rid, but guard against future edge cases
 WHERE "bonica.rid" IS NOT NULL
@@ -114,14 +114,14 @@ ORDER BY total_amount DESC
 | `contribution_count` | int64 | Number of contributions |
 | `individual_total` | float64 | Sum from individual contributors |
 | `individual_count` | int64 | Count from individual contributors |
-| `non_individual_total` | float64 | Sum from PACs, corps, committees |
-| `non_individual_count` | int64 | Count from PACs, corps, committees |
+| `organizational_total` | float64 | Sum from PACs, corps, committees |
+| `organizational_count` | int64 | Count from PACs, corps, committees |
 
 ## Validation Suite
 
 Every extracted file passes a **two-tier validation** suite before being accepted:
 
-### Non-Individual Validation
+### Organizational Filter Validation
 
 #### Tier 1: Completeness Check
 
@@ -177,11 +177,11 @@ The filtered datasets are available on HuggingFace:
 
 ```
 contributions/
-├── non_individual/
-│   ├── contribDB_1980_non_individual.parquet
-│   ├── contribDB_1982_non_individual.parquet
+├── organizational/
+│   ├── contribDB_1980_organizational.parquet
+│   ├── contribDB_1982_organizational.parquet
 │   ├── ...
-│   └── contribDB_2024_non_individual.parquet
+│   └── contribDB_2024_organizational.parquet
 └── recipient_aggregates/
     ├── recipient_aggregates_1980.parquet
     ├── recipient_aggregates_1982.parquet
@@ -224,7 +224,7 @@ python -m contribution_filters output/ --all --delay 30
 | `--all` | Process all cycles (1980-2024) |
 | `--start-cycle` | Start of cycle range |
 | `--end-cycle` | End of cycle range |
-| `--output-type` | `non_individual`, `aggregates`, or `all` (default) |
+| `--output-type` | `organizational`, `aggregates`, or `all` (default) |
 | `--no-validate` | Skip validation (not recommended) |
 | `--sample-size` | Sample size for aggregation validation (default: 100) |
 | `--skip-existing` | Skip files that already exist |
@@ -234,17 +234,17 @@ python -m contribution_filters output/ --all --delay 30
 
 ```python
 from contribution_filters import (
-    extract_non_individual_contributions,
+    extract_organizational_contributions,
     extract_recipient_aggregates,
 )
 
-# Non-individual contributions
-result = extract_non_individual_contributions(
-    "output/non_individual/contribDB_2020_non_individual.parquet",
+# Organizational contributions
+result = extract_organizational_contributions(
+    "output/organizational/contribDB_2020_organizational.parquet",
     cycle=2020,
     validate=True,
 )
-print(f"Extracted {result.output_count:,} non-individual contributions")
+print(f"Extracted {result.output_count:,} organizational contributions")
 print(f"Validation: {'PASS' if result.validation.all_valid else 'FAIL'}")
 
 # Recipient aggregates
@@ -263,7 +263,7 @@ print(f"Validation: {'PASS' if result.validation.all_valid else 'FAIL'}")
 For local files or alternative sources:
 
 ```python
-result = extract_non_individual_contributions(
+result = extract_organizational_contributions(
     "output.parquet",
     cycle=2020,
     source_url="/path/to/local/contribDB_2020.parquet",
@@ -273,7 +273,7 @@ result = extract_non_individual_contributions(
 ## Data Integrity Guarantees
 
 1. **No data mutation**: Filter queries use `SELECT *` with `WHERE` clauses only
-2. **Schema preservation**: Output retains all source columns for non-individual filter
+2. **Schema preservation**: Output retains all source columns for organizational filter
 3. **Aggregation accuracy**: Sample-based verification confirms SUM/COUNT correctness
 4. **Type safety**: Explicit PyArrow schema for recipient aggregates output
 5. **SQL injection prevention**: Source URLs validated against allowlist of domains

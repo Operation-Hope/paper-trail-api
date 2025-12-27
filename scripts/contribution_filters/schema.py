@@ -56,9 +56,10 @@ def validate_cycle(cycle: int) -> bool:
 # SQL QUERIES
 # =============================================================================
 
-# Non-individual contributions filter
+# Organizational contributions filter
 # Filters out individual contributors (contributor.type = 'I')
-NON_INDIVIDUAL_QUERY = """
+# Keeps PACs, corporations, committees, unions, and other organizations
+ORGANIZATIONAL_QUERY = """
 SELECT *
 FROM read_parquet('{source_url}')
 WHERE "contributor.type" != 'I'
@@ -82,11 +83,11 @@ SELECT
     -- Individual contributor breakdown (contributor.type = 'I')
     SUM(CASE WHEN "contributor.type" = 'I' THEN amount ELSE 0 END) as individual_total,
     SUM(CASE WHEN "contributor.type" = 'I' THEN 1 ELSE 0 END) as individual_count,
-    -- Non-individual contributor breakdown (PACs, corporations, committees, etc.)
+    -- Organizational contributor breakdown (PACs, corporations, committees, etc.)
     SUM(CASE WHEN "contributor.type" != 'I' AND "contributor.type" IS NOT NULL
-        THEN amount ELSE 0 END) as non_individual_total,
+        THEN amount ELSE 0 END) as organizational_total,
     SUM(CASE WHEN "contributor.type" != 'I' AND "contributor.type" IS NOT NULL
-        THEN 1 ELSE 0 END) as non_individual_count
+        THEN 1 ELSE 0 END) as organizational_count
 FROM read_parquet('{source_url}')
 -- Defensive: all DIME records have bonica.rid, but guard against future edge cases
 WHERE "bonica.rid" IS NOT NULL
@@ -117,8 +118,8 @@ RECIPIENT_AGGREGATES_SCHEMA = pa.schema(
         pa.field("contribution_count", pa.int64()),
         pa.field("individual_total", pa.float64()),
         pa.field("individual_count", pa.int64()),
-        pa.field("non_individual_total", pa.float64()),
-        pa.field("non_individual_count", pa.int64()),
+        pa.field("organizational_total", pa.float64()),
+        pa.field("organizational_count", pa.int64()),
     ]
 )
 
@@ -134,8 +135,8 @@ RECIPIENT_AGGREGATES_COLUMNS = [
     "contribution_count",
     "individual_total",
     "individual_count",
-    "non_individual_total",
-    "non_individual_count",
+    "organizational_total",
+    "organizational_count",
 ]
 
 # =============================================================================
@@ -143,9 +144,9 @@ RECIPIENT_AGGREGATES_COLUMNS = [
 # =============================================================================
 
 
-def get_non_individual_filename(cycle: int) -> str:
-    """Get output filename for non-individual contributions."""
-    return f"contribDB_{cycle}_non_individual.parquet"
+def get_organizational_filename(cycle: int) -> str:
+    """Get output filename for organizational contributions."""
+    return f"contribDB_{cycle}_organizational.parquet"
 
 
 def get_recipient_aggregates_filename(cycle: int) -> str:

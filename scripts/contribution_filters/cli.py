@@ -8,12 +8,12 @@ from datetime import datetime
 from pathlib import Path
 
 from .exceptions import ContributionFilterError
-from .extractor import extract_non_individual_contributions, extract_recipient_aggregates
+from .extractor import extract_organizational_contributions, extract_recipient_aggregates
 from .schema import (
     ALL_CYCLES,
     MAX_CYCLE,
     MIN_CYCLE,
-    get_non_individual_filename,
+    get_organizational_filename,
     get_recipient_aggregates_filename,
 )
 
@@ -65,7 +65,7 @@ Examples:
 
     parser.add_argument(
         "--output-type",
-        choices=["non_individual", "aggregates", "all"],
+        choices=["organizational", "aggregates", "all"],
         default="all",
         dest="output_type",
         help="Type of output to generate (default: all)",
@@ -144,15 +144,15 @@ Examples:
         try:
             cycle_did_work = False
 
-            # Non-individual contributions
-            if args.output_type in ("non_individual", "all"):
+            # Organizational contributions
+            if args.output_type in ("organizational", "all"):
                 output_path = (
-                    args.output_dir / "non_individual" / get_non_individual_filename(cycle)
+                    args.output_dir / "organizational" / get_organizational_filename(cycle)
                 )
                 if args.skip_existing and output_path.exists():
                     print(f"  Skipping (exists): {output_path}")
                 else:
-                    result = extract_non_individual_contributions(
+                    result = extract_organizational_contributions(
                         output_path,
                         cycle,
                         validate=not args.no_validate,
