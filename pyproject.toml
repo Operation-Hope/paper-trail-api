@@ -9,6 +9,7 @@ authors = [{ name = "Paper Trail Contributors" }]
 
 dependencies = [
     "duckdb-loader",
+    "huggingface-hub>=1.2.3",
 ]
 
 [project.optional-dependencies]
