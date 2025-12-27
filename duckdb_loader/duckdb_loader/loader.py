@@ -154,12 +154,14 @@ def load_to_duckdb(
 
             try:
                 # Get count before insert
-                count_before = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+                result_before = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+                count_before = result_before[0] if result_before else 0
 
                 conn.execute(insert_sql)
 
                 # Get count after insert
-                count_after = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+                result_after = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+                count_after = result_after[0] if result_after else 0
 
                 cycle_rows = count_after - count_before
                 rows_loaded += cycle_rows
@@ -172,7 +174,7 @@ def load_to_duckdb(
                 break
 
     finally:
-        if show_progress and hasattr(cycles_to_process, "close"):
+        if show_progress and isinstance(cycles_to_process, tqdm):
             cycles_to_process.close()
 
     # Create indexes
@@ -227,7 +229,8 @@ def get_table_info(database_path: str | Path, table_name: str = "contributions")
     """
     conn = duckdb.connect(str(database_path), read_only=True)
     try:
-        row_count = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+        result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+        row_count = result[0] if result else 0
         columns = conn.execute(f"DESCRIBE {table_name}").fetchall()
 
         # Get file size

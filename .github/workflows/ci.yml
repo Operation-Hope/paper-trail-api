@@ -33,8 +33,6 @@ jobs:
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
-    # Type checking is informational until pre-existing issues are resolved
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +48,7 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run ty type checker
-        run: uv run ty check duckdb_loader/ || echo "Type checking found issues (informational)"
+        run: uv run ty check duckdb_loader/
 
   test:
     name: Test
