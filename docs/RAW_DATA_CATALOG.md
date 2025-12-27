@@ -7,10 +7,14 @@ This document provides a comprehensive list of all raw data sources identified a
 ### 1. Voteview (UCLA)
 *   **Description:** The authoritative historical record of U.S. Congressional roll-call voting.
 *   **Data Provided:** Legislator metadata (Bioguide IDs, ICPSR codes), individual vote records (yea/nay/present), and rollcall metadata (dates, descriptions, results).
-*   **Download URLs:**
+*   **Raw CSV Download URLs:**
     *   [HSall_members.csv](https://voteview.com/static/data/out/members/HSall_members.csv): Metadata for all historical and current Members of Congress.
     *   [HSall_votes.csv](https://voteview.com/static/data/out/votes/HSall_votes.csv): Transactional records of every individual vote cast by members.
     *   [HSall_rollcalls.csv](https://voteview.com/static/data/out/rollcalls/HSall_rollcalls.csv): Metadata for rollcall votes (dates, descriptions, results).
+*   **Parquet (HuggingFace):** [Dustinhax/tyt/tyt/voteview](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/tyt/voteview)
+    *   `HSall_members.parquet` (1.5 MB) - 51K members with NOMINATE scores
+    *   `HSall_rollcalls.parquet` (6.6 MB) - 113K roll call votes
+    *   `HSall_votes.parquet` (31 MB) - 26M individual vote records
 
 ### 2. DIME - Database on Ideology, Money in Politics, and Elections (Stanford)
 *   **Description:** A massive dataset linking campaign contributions to politician ideology and behavior.

@@ -69,12 +69,17 @@ This repository provides:
 - Campaign contributions (1979-2024) - 915 million transaction records
 - Politicians/Recipients - Federal candidates who received contributions
 - Donors/Contributors - Individuals and organizations making contributions
-- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt)
+- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/tyt/dime)
+
+**Voteview** (Congressional Roll-Call Voting)
+- Roll call voting records (1789-present) - 26M individual vote records
+- Congressional member info with NOMINATE ideology scores - 51K members
+- Roll call metadata with vote descriptions - 113K roll calls
+- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/tyt/voteview)
 
 #### Coming Soon
 
 Additional data sources in development:
-- **Voteview** - Roll call voting records (1789-present), NOMINATE scores, individual legislator votes on bills
 - **Congressional Bills Project** - Manual bill topic coding using Policy Agendas taxonomy (1980-2002, 21 categories)
 - **Congress.gov** - Library of Congress bill metadata and subject indexing (2015-2024, 966+ subject terms)
 

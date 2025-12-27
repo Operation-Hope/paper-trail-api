@@ -182,9 +182,9 @@ After conversion, manually upload validated files to HuggingFace:
 https://huggingface.co/datasets/Dustinhax/tyt/tree/main/tyt/voteview/
 
 # Using HuggingFace CLI
-huggingface-cli upload Dustinhax/tyt members.parquet tyt/voteview/members.parquet
-huggingface-cli upload Dustinhax/tyt rollcalls.parquet tyt/voteview/rollcalls.parquet
-huggingface-cli upload Dustinhax/tyt votes.parquet tyt/voteview/votes.parquet
+huggingface-cli upload Dustinhax/tyt HSall_members.parquet tyt/voteview/HSall_members.parquet
+huggingface-cli upload Dustinhax/tyt HSall_rollcalls.parquet tyt/voteview/HSall_rollcalls.parquet
+huggingface-cli upload Dustinhax/tyt HSall_votes.parquet tyt/voteview/HSall_votes.parquet
 ```
 
 ## Module Structure
