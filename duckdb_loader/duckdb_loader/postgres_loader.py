@@ -97,7 +97,7 @@ def _create_postgres_schema(
     create_sql = f"""
         CREATE TABLE IF NOT EXISTS {table_name} (
             id SERIAL PRIMARY KEY,
-            {', '.join(col_defs)}
+            {", ".join(col_defs)}
         )
     """
     conn.execute(create_sql)
@@ -118,9 +118,7 @@ def _create_postgres_indexes(conn: psycopg.Connection, table_name: str) -> None:
 
     for idx_name, col in indexes:
         try:
-            conn.execute(
-                f'CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} ("{col}")'
-            )
+            conn.execute(f'CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} ("{col}")')
         except Exception:
             # Column may not exist
             pass
@@ -295,12 +293,15 @@ def get_postgres_table_info(database_url: str, table_name: str = "contributions"
             cur.execute(f"SELECT COUNT(*) FROM {table_name}")
             row_count = cur.fetchone()[0]
 
-            cur.execute(f"""
+            cur.execute(
+                """
                 SELECT column_name, data_type
                 FROM information_schema.columns
                 WHERE table_name = %s
                 ORDER BY ordinal_position
-            """, (table_name,))
+            """,
+                (table_name,),
+            )
             columns = cur.fetchall()
 
         return {

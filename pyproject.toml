@@ -1,0 +1,139 @@
+[project]
+name = "paper-trail-api"
+version = "0.1.0"
+description = "Political data pipeline for campaign finance, voting records, and legislative analysis"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+readme = "README.md"
+authors = [{ name = "Paper Trail Contributors" }]
+
+dependencies = [
+    "duckdb-loader",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.24.0",
+    "ty>=0.0.1a6",
+    "pre-commit>=4.0.0",
+    "duckdb>=0.9.0",
+]
+
+[tool.uv.sources]
+duckdb-loader = { workspace = true }
+
+[tool.uv.workspace]
+members = ["duckdb_loader"]
+
+# =============================================================================
+# Ruff Configuration
+# =============================================================================
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    ".tmp",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate (commented-out code)
+    "PL",     # Pylint
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",    # line too long (handled by formatter)
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments
+    "PLR0915", # too many statements
+    "PLR2004", # magic value comparison
+    "PLW2901", # loop variable overwritten
+    "SIM103",  # return condition directly (less readable sometimes)
+    "SIM105",  # contextlib.suppress (less readable)
+    "SIM108",  # ternary operator (less readable sometimes)
+    "SIM113",  # use enumerate (style preference)
+    "RUF022",  # unsorted __all__ (preserve logical grouping)
+    "RUF034",  # useless if-else (keep for clarity)
+    "B904",    # raise from err (style preference)
+    "PLC0415", # import at top level (allow in tests/functions)
+    "TC003",   # type checking imports (style preference)
+    "PLR1714", # merge comparisons (less readable)
+    "UP038",   # isinstance tuple vs union (style preference)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "ARG",    # unused arguments OK in tests (fixtures)
+    "PLR2004", # magic values OK in tests
+]
+"scripts/**/*.py" = [
+    "PLR0913", # scripts may have many CLI args
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["duckdb_loader"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# =============================================================================
+# Pytest Configuration
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests requiring external services",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+# =============================================================================
+# Coverage Configuration
+# =============================================================================
+[tool.coverage.run]
+source = ["duckdb_loader", "scripts"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

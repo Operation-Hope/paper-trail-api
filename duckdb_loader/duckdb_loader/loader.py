@@ -154,16 +154,12 @@ def load_to_duckdb(
 
             try:
                 # Get count before insert
-                count_before = conn.execute(
-                    f"SELECT COUNT(*) FROM {table_name}"
-                ).fetchone()[0]
+                count_before = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
 
                 conn.execute(insert_sql)
 
                 # Get count after insert
-                count_after = conn.execute(
-                    f"SELECT COUNT(*) FROM {table_name}"
-                ).fetchone()[0]
+                count_after = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
 
                 cycle_rows = count_after - count_before
                 rows_loaded += cycle_rows

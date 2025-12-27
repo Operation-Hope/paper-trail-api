@@ -12,8 +12,6 @@ import pyarrow.parquet as pq
 
 from .exceptions import CSVParseError, SchemaValidationError
 from .schema import (
-    DIME_SCHEMA,
-    EXPECTED_COLUMNS,
     NULL_VALUES,
     FileType,
     FileTypeConfig,
@@ -103,12 +101,10 @@ def convert_dime_file(
     # Step 4: Validate output
     validation_result = ValidationResult()
     if validate:
-        print(f"  Validating...")
+        print("  Validating...")
 
         # Validation tier 1: Row count (fastest - uses parquet metadata)
-        validation_result = validate_row_count(
-            source_path, output_path, expected_row_count
-        )
+        validation_result = validate_row_count(source_path, output_path, expected_row_count)
         print(f"    Row count: PASS ({validation_result.row_count_actual:,})")
 
         # Validation tier 2: Column checksums (uses streaming stats + column reads)
@@ -121,9 +117,11 @@ def convert_dime_file(
             key_columns=config.key_columns,
         )
         if config.sum_column:
-            print(f"    Checksums: PASS ({config.sum_column} sum: {validation_result.sum_column_actual:,.2f})")
+            print(
+                f"    Checksums: PASS ({config.sum_column} sum: {validation_result.sum_column_actual:,.2f})"
+            )
         else:
-            print(f"    Checksums: PASS (non-null counts verified)")
+            print("    Checksums: PASS (non-null counts verified)")
 
         # Validation tier 3: Sample comparison
         validation_result = validate_sample_rows(

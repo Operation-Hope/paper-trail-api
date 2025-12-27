@@ -34,7 +34,7 @@ class CSVParseError(DIMEConversionError):
             val = self.problematic_value[:100]
             if len(self.problematic_value) > 100:
                 val += "..."
-            parts.append(f"value: {repr(val)}")
+            parts.append(f"value: {val!r}")
         parts.append(self.message)
         return " ".join(parts)
 
@@ -82,8 +82,8 @@ class SampleMismatchError(DIMEConversionError):
     def __str__(self) -> str:
         return (
             f"[{self.source_path.name}] Sample mismatch at row {self.row_index}, "
-            f"column '{self.column_name}': expected {repr(self.expected_value)}, "
-            f"got {repr(self.actual_value)}"
+            f"column '{self.column_name}': expected {self.expected_value!r}, "
+            f"got {self.actual_value!r}"
         )
 
 
