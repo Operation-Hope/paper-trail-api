@@ -25,7 +25,31 @@ The DIME campaign finance dataset is available on Huggingface:
 **[📊 Dustinhax/paper-trail-data on Huggingface](https://huggingface.co/datasets/Dustinhax/paper-trail-data)** (processed data)
 
 - Transformed/filtered datasets ready for database population
+- `dime/contributions/organizational/` - 57.8M PAC/committee contributions (1980-2024)
+- `dime/contributions/recipient_aggregates/` - 752K recipient summary records (1980-2024)
 - `distinct_legislators.parquet` - 2,303 legislators (1979-present)
+
+#### Organizational Contributions Schema
+
+Contributions from PACs, corporations, committees, unions (excludes individual donors). Same 45-column schema as source DIME contributions.
+
+#### Recipient Aggregates Schema
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `bonica.rid` | string | Recipient ID |
+| `recipient.name` | string | Recipient name |
+| `recipient.party` | string | Party affiliation |
+| `recipient.type` | string | Recipient type code |
+| `recipient.state` | string | State code |
+| `candidate.cfscore` | float64 | CFscore ideology measure |
+| `total_amount` | float64 | Sum of all contributions |
+| `avg_amount` | float64 | Average contribution size |
+| `contribution_count` | int64 | Number of contributions |
+| `individual_total` | float64 | Sum from individual contributors |
+| `individual_count` | int64 | Count from individual contributors |
+| `organizational_total` | float64 | Sum from PACs, corps, committees |
+| `organizational_count` | int64 | Count from PACs, corps, committees |
 
 ### Load into DuckDB or PostgreSQL
 
