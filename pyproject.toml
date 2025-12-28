@@ -10,6 +10,7 @@ authors = [{ name = "Paper Trail Contributors" }]
 dependencies = [
     "duckdb-loader",
     "huggingface-hub>=1.2.3",
+    "psycopg-binary>=3.3.2",
 ]
 
 [project.optional-dependencies]
