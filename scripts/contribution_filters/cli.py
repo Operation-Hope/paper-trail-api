@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -17,9 +18,22 @@ from .schema import (
     get_recipient_aggregates_filename,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _setup_logging() -> None:
+    """Configure logging for CLI usage."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+
 
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI."""
+    _setup_logging()
+
     parser = argparse.ArgumentParser(
         description="Extract filtered contribution datasets from DIME data",
         epilog="""
@@ -114,6 +128,11 @@ Examples:
         print("ERROR: No valid cycles specified", file=sys.stderr)
         return 1
 
+    # Validate sample_size is positive
+    if args.sample_size <= 0:
+        print("ERROR: --sample-size must be a positive integer", file=sys.stderr)
+        return 1
+
     # Validate cycles are in range
     for c in cycles:
         if c not in ALL_CYCLES:
@@ -123,23 +142,24 @@ Examples:
             )
             return 1
 
-    print(f"[{datetime.now().isoformat()}] Processing {len(cycles)} cycle(s)")
-    print(f"  Output directory: {args.output_dir}")
-    print(f"  Output type: {args.output_type}")
-    print(f"  Validation: {'disabled' if args.no_validate else 'enabled'}")
+    logger.info("[%s] Processing %d cycle(s)", datetime.now().isoformat(), len(cycles))
+    logger.info("  Output directory: %s", args.output_dir)
+    logger.info("  Output type: %s", args.output_type)
+    logger.info("  Validation: %s", "disabled" if args.no_validate else "enabled")
     if args.skip_existing:
-        print("  Skip existing: enabled")
+        logger.info("  Skip existing: enabled")
     if args.delay > 0:
-        print(f"  Delay between cycles: {args.delay}s")
+        logger.info("  Delay between cycles: %ds", args.delay)
 
     success_count = 0
     error_count = 0
     skip_count = 0
 
     for i, cycle in enumerate(cycles):
-        print(f"\n{'=' * 60}")
-        print(f"Cycle: {cycle}")
-        print(f"{'=' * 60}")
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("Cycle: %d", cycle)
+        logger.info("=" * 60)
 
         try:
             cycle_did_work = False
@@ -150,7 +170,7 @@ Examples:
                     args.output_dir / "organizational" / get_organizational_filename(cycle)
                 )
                 if args.skip_existing and output_path.exists():
-                    print(f"  Skipping (exists): {output_path}")
+                    logger.info("  Skipping (exists): %s", output_path)
                 else:
                     result = extract_organizational_contributions(
                         output_path,
@@ -158,8 +178,8 @@ Examples:
                         validate=not args.no_validate,
                     )
                     file_size = result.output_path.stat().st_size
-                    print(f"  Created: {result.output_path}")
-                    print(f"  Size: {_format_size(file_size)}")
+                    logger.info("  Created: %s", result.output_path)
+                    logger.info("  Size: %s", _format_size(file_size))
                     cycle_did_work = True
 
             # Recipient aggregates
@@ -170,7 +190,7 @@ Examples:
                     / get_recipient_aggregates_filename(cycle)
                 )
                 if args.skip_existing and output_path.exists():
-                    print(f"  Skipping (exists): {output_path}")
+                    logger.info("  Skipping (exists): %s", output_path)
                 else:
                     result = extract_recipient_aggregates(
                         output_path,
@@ -179,8 +199,8 @@ Examples:
                         sample_size=args.sample_size,
                     )
                     file_size = result.output_path.stat().st_size
-                    print(f"  Created: {result.output_path}")
-                    print(f"  Size: {_format_size(file_size)}")
+                    logger.info("  Created: %s", result.output_path)
+                    logger.info("  Size: %s", _format_size(file_size))
                     cycle_did_work = True
 
             if cycle_did_work:
@@ -189,21 +209,22 @@ Examples:
                 if args.delay > 0 and i < len(cycles) - 1:
                     import time
 
-                    print(f"  Waiting {args.delay}s before next cycle...")
+                    logger.info("  Waiting %ds before next cycle...", args.delay)
                     time.sleep(args.delay)
             else:
                 skip_count += 1
 
         except ContributionFilterError as e:
-            print(f"ERROR: {e}", file=sys.stderr)
+            logger.error("ERROR: %s", e)
             error_count += 1
 
-    print(f"\n[{datetime.now().isoformat()}] Complete")
-    print(f"  Success: {success_count}/{len(cycles)}")
+    logger.info("")
+    logger.info("[%s] Complete", datetime.now().isoformat())
+    logger.info("  Success: %d/%d", success_count, len(cycles))
     if skip_count > 0:
-        print(f"  Skipped: {skip_count}")
+        logger.info("  Skipped: %d", skip_count)
     if error_count > 0:
-        print(f"  Errors: {error_count}")
+        logger.info("  Errors: %d", error_count)
         return 1
 
     return 0

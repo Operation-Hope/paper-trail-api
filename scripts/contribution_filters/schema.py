@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pyarrow as pa
 
 # =============================================================================
@@ -16,9 +18,55 @@ ALLOWED_SOURCE_DOMAINS = [
     "huggingface.co",
 ]
 
+# Allowed local directories for source files (path traversal mitigation)
+ALLOWED_LOCAL_DIRECTORIES = [
+    "/Users/d/projects/tyt/paper-trail-api/",
+    "/tmp/",
+]
+
+
+def escape_sql_string(value: str) -> str:
+    """Escape a string value for safe SQL interpolation.
+
+    Escapes single quotes and backslashes to prevent SQL injection.
+
+    Args:
+        value: String value to escape
+
+    Returns:
+        Escaped string safe for SQL interpolation
+    """
+    # Escape backslashes first, then single quotes
+    return value.replace("\\", "\\\\").replace("'", "''")
+
+
+def validate_path_string(path: str) -> bool:
+    """Validate a file path string for safe SQL use.
+
+    Rejects paths containing SQL injection patterns.
+
+    Args:
+        path: File path to validate
+
+    Returns:
+        True if path is safe for SQL interpolation
+    """
+    # Reject obvious SQL injection patterns
+    dangerous_patterns = [
+        r";\s*--",  # SQL comment after semicolon
+        r";\s*DROP",  # DROP statement
+        r";\s*DELETE",  # DELETE statement
+        r";\s*INSERT",  # INSERT statement
+        r";\s*UPDATE",  # UPDATE statement
+        r"UNION\s+SELECT",  # UNION injection
+        r"'\s*OR\s+'",  # OR injection
+    ]
+    path_upper = path.upper()
+    return all(not re.search(pattern, path_upper, re.IGNORECASE) for pattern in dangerous_patterns)
+
 
 def validate_source_url(url: str) -> bool:
-    """Check if source URL is from an allowed domain or is a local file path.
+    """Check if source URL is from an allowed domain or is a valid local file path.
 
     Args:
         url: The URL or local file path to validate
@@ -29,9 +77,17 @@ def validate_source_url(url: str) -> bool:
     from pathlib import Path
     from urllib.parse import urlparse
 
-    # Allow local file paths
+    # Validate path string for SQL safety
+    if not validate_path_string(url):
+        return False
+
+    # Allow local file paths within allowed directories
     if url.startswith("/") or url.startswith("./"):
-        return Path(url).exists()
+        path = Path(url).resolve()
+        if not path.exists():
+            return False
+        # Check if path is within an allowed directory
+        return any(str(path).startswith(allowed_dir) for allowed_dir in ALLOWED_LOCAL_DIRECTORIES)
 
     parsed = urlparse(url)
     return any(parsed.netloc.endswith(domain) for domain in ALLOWED_SOURCE_DOMAINS)

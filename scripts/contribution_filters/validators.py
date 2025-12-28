@@ -20,6 +20,7 @@ from .exceptions import (
     CompletenessError,
     FilterValidationError,
 )
+from .schema import escape_sql_string
 
 
 @dataclass
@@ -140,8 +141,8 @@ def validate_recipient_aggregates(
     result.aggregation_sample_size = actual_sample_size
 
     for rid in sample_rids:
-        # Escape single quotes in recipient ID for SQL
-        rid_escaped = rid.replace("'", "''")
+        # Escape recipient ID for safe SQL interpolation
+        rid_escaped = escape_sql_string(rid)
 
         # Get expected values from source
         expected = conn.execute(f"""
@@ -175,19 +176,21 @@ def validate_recipient_aggregates(
                 actual_value=str(actual_count),
             )
 
-        # Verify sum (allow small float tolerance)
-        if (
-            expected_total is not None
-            and actual_total is not None
-            and abs(actual_total - expected_total) > 0.01
-        ):
-            raise AggregationIntegrityError(
-                message="total_amount mismatch",
-                recipient_id=rid,
-                field_name="total_amount",
-                expected_value=f"{expected_total:.2f}",
-                actual_value=f"{actual_total:.2f}",
-            )
+        # Verify sum (allow small float tolerance - absolute or relative)
+        # Use relative tolerance for large amounts to handle float accumulation errors
+        if expected_total is not None and actual_total is not None:
+            abs_diff = abs(actual_total - expected_total)
+            # Absolute tolerance of $0.01 OR relative tolerance of 0.0001% (1e-6)
+            rel_tolerance = abs(expected_total) * 1e-6
+            tolerance = max(0.01, rel_tolerance)
+            if abs_diff > tolerance:
+                raise AggregationIntegrityError(
+                    message="total_amount mismatch",
+                    recipient_id=rid,
+                    field_name="total_amount",
+                    expected_value=f"{expected_total:.2f}",
+                    actual_value=f"{actual_total:.2f}",
+                )
 
     result.aggregation_valid = True
     return result

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -29,6 +30,8 @@ from .validators import (
     validate_organizational_output,
     validate_recipient_aggregates,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OutputType(Enum):
@@ -101,11 +104,12 @@ def extract_organizational_contributions(
             allowed_domains=ALLOWED_SOURCE_DOMAINS,
         )
 
-    conn = duckdb.connect()
-
+    conn = None
     try:
+        conn = duckdb.connect()
+
         # Step 1: Count source rows
-        print(f"Reading from: {source_url}")
+        logger.info("Reading from: %s", source_url)
         try:
             source_rows = conn.execute(f"""
                 SELECT COUNT(*)
@@ -117,10 +121,10 @@ def extract_organizational_contributions(
                 source_url=source_url,
             ) from e
 
-        print(f"  Source rows: {source_rows:,}")
+        logger.info("  Source rows: %s", f"{source_rows:,}")
 
         # Step 2: Execute filter query and write
-        print("Filtering organizational contributions...")
+        logger.info("Filtering organizational contributions...")
         query = ORGANIZATIONAL_QUERY.format(source_url=source_url)
 
         try:
@@ -139,17 +143,18 @@ def extract_organizational_contributions(
         output_count = conn.execute(f"""
             SELECT COUNT(*) FROM read_parquet('{output_path}')
         """).fetchone()[0]
-        print(f"  Organizational contributions: {output_count:,}")
-        print(f"  Filtered out: {source_rows - output_count:,} individual contributions")
+        logger.info("  Organizational contributions: %s", f"{output_count:,}")
+        filtered_count = source_rows - output_count
+        logger.info("  Filtered out: %s individual contributions", f"{filtered_count:,}")
 
         # Step 4: Validate
         validation = ValidationResult()
         if validate:
-            print("Validating...")
+            logger.info("Validating...")
             validation = validate_organizational_output(
                 source_url, output_path, conn, source_rows, output_count
             )
-            print("  Validation: PASS")
+            logger.info("  Validation: PASS")
 
         return ExtractionResult(
             source_url=source_url,
@@ -162,7 +167,8 @@ def extract_organizational_contributions(
         )
 
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
 
 def extract_recipient_aggregates(
@@ -219,11 +225,12 @@ def extract_recipient_aggregates(
             allowed_domains=ALLOWED_SOURCE_DOMAINS,
         )
 
-    conn = duckdb.connect()
-
+    conn = None
     try:
+        conn = duckdb.connect()
+
         # Step 1: Count source rows (with valid recipient ID)
-        print(f"Reading from: {source_url}")
+        logger.info("Reading from: %s", source_url)
         try:
             source_rows = conn.execute(f"""
                 SELECT COUNT(*)
@@ -236,10 +243,10 @@ def extract_recipient_aggregates(
                 source_url=source_url,
             ) from e
 
-        print(f"  Source rows (with recipient ID): {source_rows:,}")
+        logger.info("  Source rows (with recipient ID): %s", f"{source_rows:,}")
 
         # Step 2: Execute aggregation query and write
-        print("Aggregating by recipient...")
+        logger.info("Aggregating by recipient...")
         query = RECIPIENT_AGGREGATES_QUERY.format(source_url=source_url)
 
         try:
@@ -258,14 +265,15 @@ def extract_recipient_aggregates(
         output_count = conn.execute(f"""
             SELECT COUNT(*) FROM read_parquet('{output_path}')
         """).fetchone()[0]
-        print(f"  Distinct recipient groups: {output_count:,}")
+        logger.info("  Distinct recipient groups: %s", f"{output_count:,}")
 
         # Step 4: Validate
         validation = ValidationResult()
         if validate:
-            print("Validating...")
+            logger.info("Validating...")
             validation = validate_recipient_aggregates(source_url, output_path, conn, sample_size)
-            print(f"  Validation: PASS ({validation.aggregation_sample_size} recipients verified)")
+            verified = validation.aggregation_sample_size
+            logger.info("  Validation: PASS (%d recipients verified)", verified)
 
         return ExtractionResult(
             source_url=source_url,
@@ -278,4 +286,5 @@ def extract_recipient_aggregates(
         )
 
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
