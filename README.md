@@ -16,7 +16,7 @@
 
 The DIME campaign finance dataset is available on Huggingface:
 
-**[📊 Dustinhax/tyt on Huggingface](https://huggingface.co/datasets/Dustinhax/tyt)** (raw data)
+**[📊 Dustinhax/paper-trail-data on Huggingface](https://huggingface.co/datasets/Dustinhax/paper-trail-data/tree/main)** (raw data)
 
 - **915 million** contribution records (1979-2024)
 - **58.5 GB** in Parquet format
@@ -98,7 +98,7 @@ This repository provides:
 - Campaign contributions (1979-2024) - 915 million transaction records
 - Politicians/Recipients - Federal candidates who received contributions
 - Donors/Contributors - Individuals and organizations making contributions
-- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/tyt/tree/main/dime)
+- Available on [Huggingface](https://huggingface.co/datasets/Dustinhax/paper-trail-data/tree/main/dime/contributions)
 
 **Voteview** (Congressional Roll-Call Voting)
 - Roll call voting records (1789-present) - 26M individual vote records
