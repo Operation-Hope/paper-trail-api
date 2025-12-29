@@ -4,6 +4,7 @@ import click
 
 from .filters import AmountFilter, CycleFilter, StateFilter, recent_cycles
 from .loader import get_table_info, load_to_duckdb, query_database
+from .paper_trail_loader import DatasetType, load_paper_trail_to_postgres
 from .postgres_loader import load_to_postgres
 
 
@@ -256,6 +257,124 @@ def load_postgres(
     click.echo()
     click.echo(f"Loaded {result.rows_loaded:,} rows into {result.table_name}")
     click.echo(f"Database: {result.database_url}")
+
+
+@main.command("load-paper-trail")
+@click.argument("database_url", envvar="DATABASE_URL")
+@click.option(
+    "--datasets",
+    "-d",
+    multiple=True,
+    type=click.Choice(["legislators", "organizational", "recipient_aggregates", "all"]),
+    default=["all"],
+    help="Dataset(s) to load (default: all)",
+)
+@click.option(
+    "--cycles",
+    "-c",
+    multiple=True,
+    type=int,
+    help="Election cycle(s) to include (e.g., -c 2020 -c 2022)",
+)
+@click.option(
+    "--recent",
+    "-r",
+    type=int,
+    default=None,
+    help="Include last N election cycles (e.g., --recent 4 for 2018-2024)",
+)
+@click.option(
+    "--limit",
+    "-l",
+    type=int,
+    default=None,
+    help="Maximum rows per dataset (legislators always loads fully)",
+)
+@click.option(
+    "--batch-size",
+    "-b",
+    type=int,
+    default=10_000,
+    help="Batch size for inserts (default: 10000)",
+)
+@click.option(
+    "--no-indexes",
+    is_flag=True,
+    help="Skip creating indexes after load",
+)
+def load_paper_trail(
+    database_url: str,
+    datasets: tuple[str, ...],
+    cycles: tuple[int, ...],
+    recent: int | None,
+    limit: int | None,
+    batch_size: int,
+    no_indexes: bool,
+):
+    """Load paper-trail-data into PostgreSQL.
+
+    DATABASE_URL is the PostgreSQL connection string. Can also be set via
+    the DATABASE_URL environment variable.
+
+    Loads three datasets from Dustinhax/paper-trail-data:
+    - distinct_legislators: Unique legislators from Voteview (~2,303 rows)
+    - organizational_contributions: DIME contributions from organizational donors
+    - recipient_aggregates: Pre-computed contribution aggregations by recipient
+
+    Examples:
+
+        # Load all datasets for 2024 cycle
+        duckdb-loader load-paper-trail $DATABASE_URL -c 2024
+
+        # Load only legislators and aggregates
+        duckdb-loader load-paper-trail $DATABASE_URL -d legislators -d recipient_aggregates
+
+        # Load last 4 cycles of organizational contributions
+        duckdb-loader load-paper-trail $DATABASE_URL -d organizational --recent 4
+    """
+    filters = []
+
+    # Cycle filters
+    if cycles:
+        filters.append(CycleFilter(cycles=list(cycles)))
+    elif recent:
+        filters.append(recent_cycles(recent))
+
+    # Normalize datasets
+    dataset_list: list[DatasetType] = []
+    if "all" in datasets or not datasets:
+        dataset_list = ["legislators", "organizational", "recipient_aggregates"]
+    else:
+        dataset_list = list(datasets)  # type: ignore[arg-type]
+
+    # Show what we're doing
+    click.echo("Loading paper-trail-data into PostgreSQL")
+    click.echo(f"Datasets: {', '.join(dataset_list)}")
+    if filters:
+        click.echo("Filters:")
+        for f in filters:
+            click.echo(f"  - {f.describe()}")
+    if limit:
+        click.echo(f"Limit: {limit:,} rows per dataset")
+    click.echo()
+
+    # Load
+    result = load_paper_trail_to_postgres(
+        database_url,
+        datasets=dataset_list,
+        filters=filters if filters else None,
+        limit=limit,
+        batch_size=batch_size,
+        create_indexes_after=not no_indexes,
+    )
+
+    click.echo()
+    click.echo("Load complete:")
+    click.echo(f"  distinct_legislators: {result.legislators_loaded:,} rows")
+    click.echo(f"  organizational_contributions: {result.organizational_loaded:,} rows")
+    click.echo(f"  recipient_aggregates: {result.recipient_aggregates_loaded:,} rows")
+    click.echo(f"  Total: {result.total_rows_loaded:,} rows")
+    click.echo(f"  Database: {result.database_url}")
 
 
 @main.command()
