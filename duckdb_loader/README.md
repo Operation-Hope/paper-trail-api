@@ -23,6 +23,7 @@ Choose your target database:
 |--------|----------|-------|
 | **DuckDB** | Quick analysis, exploration, no database setup | Just run the command |
 | **PostgreSQL** | Full-stack development, testing API integration | Requires running PostgreSQL |
+| **Paper Trail** | Pre-processed datasets (legislators, aggregates) | Requires running PostgreSQL |
 
 ### Option 1: DuckDB (Recommended for Analysis)
 
@@ -61,6 +62,30 @@ duckdb-loader load-postgres $DATABASE_URL --recent 4 -s CA
 
 **Note:** Column names with dots (e.g., `contributor.name`) are converted to underscores (e.g., `contributor_name`) in PostgreSQL for compatibility.
 
+### Option 3: Paper Trail Data (Processed Datasets)
+
+Load pre-processed datasets from [Dustinhax/paper-trail-data](https://huggingface.co/datasets/Dustinhax/paper-trail-data):
+
+| Dataset | Description | Size |
+|---------|-------------|------|
+| `legislators` | Unique legislators from Voteview | ~2,300 rows |
+| `organizational` | Organizational donor contributions only | ~15M rows/cycle |
+| `recipient_aggregates` | Pre-computed totals by recipient | ~20k rows/cycle |
+
+```bash
+# Load all datasets for 2024
+duckdb-loader load-paper-trail $DATABASE_URL -c 2024
+
+# Load only legislators (always loads fully)
+duckdb-loader load-paper-trail $DATABASE_URL -d legislators
+
+# Load organizational contributions for last 4 cycles
+duckdb-loader load-paper-trail $DATABASE_URL -d organizational --recent 4
+
+# Load specific datasets
+duckdb-loader load-paper-trail $DATABASE_URL -d legislators -d recipient_aggregates -c 2024
+```
+
 ### Python API
 
 ```python
@@ -77,7 +102,7 @@ result = load_to_duckdb(
 )
 print(f"Loaded {result.rows_loaded:,} rows")
 
-# PostgreSQL
+# PostgreSQL (raw DIME data)
 from duckdb_loader import load_to_postgres
 
 result = load_to_postgres(
@@ -86,6 +111,19 @@ result = load_to_postgres(
     limit=100_000,
 )
 print(f"Loaded {result.rows_loaded:,} rows")
+
+# PostgreSQL (paper-trail processed datasets)
+from duckdb_loader import load_paper_trail_to_postgres
+
+result = load_paper_trail_to_postgres(
+    "postgresql://localhost/papertrail",
+    datasets=["legislators", "organizational", "recipient_aggregates"],
+    filters=[CycleFilter([2024])],
+)
+print(f"Loaded {result.total_rows_loaded:,} total rows")
+print(f"  Legislators: {result.legislators_loaded:,}")
+print(f"  Organizational: {result.organizational_loaded:,}")
+print(f"  Recipient Aggregates: {result.recipient_aggregates_loaded:,}")
 ```
 
 ## Filter Options
