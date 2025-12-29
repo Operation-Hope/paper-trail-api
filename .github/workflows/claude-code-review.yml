@@ -12,8 +12,10 @@ on:
 
 jobs:
   claude-review:
-    # Only run for repository maintainers (OWNER, MEMBER, COLLABORATOR)
-    if: contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+    # Only run for repository maintainers, skip dependabot PRs
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
 
     runs-on: ubuntu-latest
     permissions:
