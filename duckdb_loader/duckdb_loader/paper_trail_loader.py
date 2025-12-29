@@ -14,18 +14,18 @@ then batch-inserts into PostgreSQL.
 Data source: https://huggingface.co/datasets/Dustinhax/paper-trail-data
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, cast
-
-if TYPE_CHECKING:
-    from typing import LiteralString
+from typing import Literal
 
 import duckdb
 import psycopg
+from psycopg import errors as pg_errors
 from psycopg import sql
 
 from .filters import CycleFilter, Filter
 from .schema import (
+    AVAILABLE_CYCLES,
     LEGISLATORS_COLUMNS,
     ORGANIZATIONAL_COLUMNS,
     RECIPIENT_AGGREGATES_COLUMNS,
@@ -38,9 +38,6 @@ PAPER_TRAIL_BASE_URL = "https://huggingface.co/datasets/Dustinhax/paper-trail-da
 LEGISLATORS_URL = f"{PAPER_TRAIL_BASE_URL}/distinct_legislators.parquet"
 ORGANIZATIONAL_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/organizational/contribDB_{{cycle}}_organizational.parquet"
 RECIPIENT_AGGREGATES_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/recipient_aggregates/recipient_aggregates_{{cycle}}.parquet"
-
-# Available election cycles (even years 1980-2024)
-AVAILABLE_CYCLES = list(range(1980, 2026, 2))
 
 DEFAULT_BATCH_SIZE = 100_000  # Large batches for COPY performance
 
@@ -137,16 +134,30 @@ def _get_postgres_column_type_recipient_aggregates(col: str) -> str:
     return type_map.get(col, "TEXT")
 
 
+def _build_column_def(col: str, type_func: Callable[[str], str]) -> sql.Composed:
+    """Build a column definition using proper sql composition.
+
+    Args:
+        col: Original column name (may contain dots)
+        type_func: Function that returns PostgreSQL type for the column
+
+    Returns:
+        sql.Composed representing '"sanitized_name" TYPE'
+    """
+    sanitized = _sanitize_column_name(col)
+    pg_type = type_func(col)
+    return sql.SQL("{} {}").format(sql.Identifier(sanitized), sql.SQL(pg_type))
+
+
 def _create_legislators_schema(
     conn: psycopg.Connection, table_name: str = "distinct_legislators"
 ) -> None:
     """Create the distinct_legislators table in PostgreSQL."""
-    col_defs_str = ", ".join(
-        f'"{_sanitize_column_name(col)}" {_get_postgres_column_type_legislators(col)}'
-        for col in LEGISLATORS_COLUMNS
-    )
+    col_defs = [
+        _build_column_def(col, _get_postgres_column_type_legislators) for col in LEGISLATORS_COLUMNS
+    ]
     create_sql = sql.SQL("CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY, {})").format(
-        sql.Identifier(table_name), sql.SQL(cast("LiteralString", col_defs_str))
+        sql.Identifier(table_name), sql.SQL(", ").join(col_defs)
     )
     conn.execute(create_sql)
     conn.commit()
@@ -156,12 +167,12 @@ def _create_organizational_schema(
     conn: psycopg.Connection, table_name: str = "organizational_contributions"
 ) -> None:
     """Create the organizational_contributions table in PostgreSQL."""
-    col_defs_str = ", ".join(
-        f'"{_sanitize_column_name(col)}" {_get_postgres_column_type_organizational(col)}'
+    col_defs = [
+        _build_column_def(col, _get_postgres_column_type_organizational)
         for col in ORGANIZATIONAL_COLUMNS
-    )
+    ]
     create_sql = sql.SQL("CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY, {})").format(
-        sql.Identifier(table_name), sql.SQL(cast("LiteralString", col_defs_str))
+        sql.Identifier(table_name), sql.SQL(", ").join(col_defs)
     )
     conn.execute(create_sql)
     conn.commit()
@@ -171,14 +182,14 @@ def _create_recipient_aggregates_schema(
     conn: psycopg.Connection, table_name: str = "recipient_aggregates"
 ) -> None:
     """Create the recipient_aggregates table in PostgreSQL."""
-    col_defs_str = ", ".join(
-        f'"{_sanitize_column_name(col)}" {_get_postgres_column_type_recipient_aggregates(col)}'
+    col_defs = [
+        _build_column_def(col, _get_postgres_column_type_recipient_aggregates)
         for col in RECIPIENT_AGGREGATES_COLUMNS
-    )
+    ]
     # Add cycle column for tracking which cycle the aggregate is from
     create_sql = sql.SQL(
         "CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY, cycle INTEGER, {})"
-    ).format(sql.Identifier(table_name), sql.SQL(cast("LiteralString", col_defs_str)))
+    ).format(sql.Identifier(table_name), sql.SQL(", ").join(col_defs))
     conn.execute(create_sql)
     conn.commit()
 
@@ -200,7 +211,8 @@ def _create_legislators_indexes(
                 sql.Identifier(col),
             )
             conn.execute(create_idx_sql)
-        except Exception:
+        except (pg_errors.UndefinedColumn, pg_errors.UndefinedTable):
+            # Column or table may not exist if user selected subset
             pass
     conn.commit()
 
@@ -225,7 +237,8 @@ def _create_organizational_indexes(
                 sql.Identifier(col),
             )
             conn.execute(create_idx_sql)
-        except Exception:
+        except (pg_errors.UndefinedColumn, pg_errors.UndefinedTable):
+            # Column or table may not exist if user selected subset
             pass
     conn.commit()
 
@@ -248,7 +261,8 @@ def _create_recipient_aggregates_indexes(
                 sql.Identifier(col),
             )
             conn.execute(create_idx_sql)
-        except Exception:
+        except (pg_errors.UndefinedColumn, pg_errors.UndefinedTable):
+            # Column or table may not exist if user selected subset
             pass
     conn.commit()
 
@@ -280,15 +294,18 @@ def _load_legislators(
     result = duck_conn.execute(query_sql)
     batch = []
 
+    # Find the index of congresses_served dynamically
+    congresses_served_idx = LEGISLATORS_COLUMNS.index("congresses_served")
+
     while True:
         row = result.fetchone()
         if row is None:
             break
 
-        # Convert list type for congresses_served (index 4)
+        # Convert list type for congresses_served
         row_list = list(row)
-        if row_list[4] is not None:
-            row_list[4] = list(row_list[4])  # Ensure it's a Python list
+        if row_list[congresses_served_idx] is not None:
+            row_list[congresses_served_idx] = list(row_list[congresses_served_idx])
         batch.append(tuple(row_list))
 
         if len(batch) >= batch_size:
@@ -513,6 +530,7 @@ def load_paper_trail_to_postgres(
     filters = filters or []
 
     # Normalize datasets to list
+    valid_datasets = {"legislators", "organizational", "recipient_aggregates", "all"}
     dataset_list: list[str]
     if isinstance(datasets, str):
         if datasets == "all":
@@ -521,6 +539,13 @@ def load_paper_trail_to_postgres(
             dataset_list = [datasets]
     else:
         dataset_list = list(datasets)
+
+    # Validate dataset names
+    invalid_datasets = set(dataset_list) - valid_datasets
+    if invalid_datasets:
+        raise ValueError(
+            f"Invalid dataset(s): {invalid_datasets}. Valid options: {valid_datasets - {'all'}}"
+        )
 
     # Determine cycles from filters
     cycles = _get_cycles_from_filters(filters)

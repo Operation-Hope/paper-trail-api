@@ -11,14 +11,11 @@ import duckdb
 from tqdm import tqdm
 
 from .filters import CycleFilter, Filter
-from .schema import CONTRIBUTIONS_COLUMNS, create_indexes, create_schema
+from .schema import AVAILABLE_CYCLES, CONTRIBUTIONS_COLUMNS, create_indexes, create_schema
 
 # Base URL for year-partitioned contribution files on Huggingface
 HF_BASE_URL = "https://huggingface.co/datasets/Dustinhax/tyt/resolve/main"
 PARQUET_URL_PATTERN = f"{HF_BASE_URL}/dime/contributions/by_year/contribDB_{{cycle}}.parquet"
-
-# Available election cycles in the dataset (even years 1980-2024)
-AVAILABLE_CYCLES = list(range(1980, 2026, 2))
 
 DEFAULT_BATCH_SIZE = 100_000
 

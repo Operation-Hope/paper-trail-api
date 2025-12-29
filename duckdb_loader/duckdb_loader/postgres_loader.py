@@ -26,16 +26,13 @@ from psycopg import sql
 from tqdm import tqdm
 
 from .filters import CycleFilter, Filter
-from .schema import CONTRIBUTIONS_COLUMNS
+from .schema import AVAILABLE_CYCLES, CONTRIBUTIONS_COLUMNS
 
 # Base URL for raw, unmodified DIME contribution files on Huggingface (Dustinhax/tyt dataset).
 # This dataset contains the original DIME contribution records converted to Parquet,
 # partitioned by election cycle year (even years 1980-2024).
 HF_BASE_URL = "https://huggingface.co/datasets/Dustinhax/tyt/resolve/main"
 PARQUET_URL_PATTERN = f"{HF_BASE_URL}/dime/contributions/by_year/contribDB_{{cycle}}.parquet"
-
-# Available election cycles in the dataset (even years 1980-2024)
-AVAILABLE_CYCLES = list(range(1980, 2026, 2))
 
 DEFAULT_BATCH_SIZE = 10_000
 

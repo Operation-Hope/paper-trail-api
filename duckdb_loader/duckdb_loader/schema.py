@@ -2,6 +2,9 @@
 
 from typing import Final
 
+# Available election cycles in DIME data (even years 1980-2024)
+AVAILABLE_CYCLES: Final[list[int]] = list(range(1980, 2026, 2))
+
 # Core columns to load (subset of the 43 available columns for efficiency)
 # Users can customize this list when loading
 CONTRIBUTIONS_COLUMNS: Final[list[str]] = [

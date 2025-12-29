@@ -10,7 +10,6 @@ from .filters import (
     recent_cycles,
 )
 from .loader import (
-    AVAILABLE_CYCLES,
     LoadResult,
     load_to_duckdb,
     query_parquet_direct,
@@ -25,6 +24,7 @@ from .postgres_loader import (
     load_to_postgres,
 )
 from .schema import (
+    AVAILABLE_CYCLES,
     CONTRIBUTIONS_COLUMNS,
     LEGISLATORS_COLUMNS,
     ORGANIZATIONAL_COLUMNS,
