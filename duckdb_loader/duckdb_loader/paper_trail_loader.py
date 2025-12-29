@@ -131,11 +131,11 @@ def _get_postgres_column_type_recipient_aggregates(col: str) -> str:
         "candidate.cfscore": "DOUBLE PRECISION",
         "total_amount": "DOUBLE PRECISION",
         "avg_amount": "DOUBLE PRECISION",
-        "contribution_count": "INTEGER",
+        "contribution_count": "DOUBLE PRECISION",  # Float in parquet
         "individual_total": "DOUBLE PRECISION",
-        "individual_count": "INTEGER",
+        "individual_count": "DOUBLE PRECISION",  # Float in parquet
         "organizational_total": "DOUBLE PRECISION",
-        "organizational_count": "INTEGER",
+        "organizational_count": "DOUBLE PRECISION",  # Float in parquet
     }
     return type_map.get(col, "TEXT")
 
