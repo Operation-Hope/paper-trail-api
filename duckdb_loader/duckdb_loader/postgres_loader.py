@@ -1,7 +1,17 @@
-"""PostgreSQL loader for DIME data from Huggingface.
+"""PostgreSQL loader for raw, unmodified DIME contribution data from Huggingface.
+
+This loader pulls data from the Dustinhax/tyt dataset which contains the original,
+unprocessed DIME (Database on Ideology, Money in Politics, and Elections) contribution
+records converted to Parquet format. Each parquet file contains the full set of 45+
+columns as provided by DIME, partitioned by election cycle year.
+
+For processed/aggregated paper-trail-data (organizational contributions, recipient
+aggregates, and distinct legislators), see paper_trail_loader.py instead.
 
 Uses DuckDB's native Parquet reading for efficient streaming from Huggingface URLs,
 then batch-inserts into PostgreSQL.
+
+Data source: https://huggingface.co/datasets/Dustinhax/tyt
 """
 
 from dataclasses import dataclass, field
@@ -18,7 +28,9 @@ from tqdm import tqdm
 from .filters import CycleFilter, Filter
 from .schema import CONTRIBUTIONS_COLUMNS
 
-# Base URL for year-partitioned contribution files on Huggingface
+# Base URL for raw, unmodified DIME contribution files on Huggingface (Dustinhax/tyt dataset).
+# This dataset contains the original DIME contribution records converted to Parquet,
+# partitioned by election cycle year (even years 1980-2024).
 HF_BASE_URL = "https://huggingface.co/datasets/Dustinhax/tyt/resolve/main"
 PARQUET_URL_PATTERN = f"{HF_BASE_URL}/dime/contributions/by_year/contribDB_{{cycle}}.parquet"
 

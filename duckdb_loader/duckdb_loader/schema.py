@@ -81,6 +81,50 @@ ALL_COLUMNS: Final[list[str]] = [
     "efec.form.type",
 ]
 
+# ============================================================================
+# Paper-trail-data schemas (Dustinhax/paper-trail-data)
+# ============================================================================
+
+# Schema for distinct_legislators table from paper-trail-data
+# Source: https://huggingface.co/datasets/Dustinhax/paper-trail-data/resolve/main/distinct_legislators.parquet
+# Contains unique legislators from Voteview data (~2,303 rows)
+LEGISLATORS_COLUMNS: Final[list[str]] = [
+    "bioguide_id",
+    "bioname",
+    "state_abbrev",
+    "party_code",
+    "congresses_served",  # LIST type - array of congress numbers
+    "first_congress",
+    "last_congress",
+    "nominate_dim1",
+    "nominate_dim2",
+]
+
+# Schema for organizational_contributions table from paper-trail-data
+# Same 45 columns as raw DIME contributions, filtered to organizational donors only
+# (excludes individual contributors where contributor.type = 'I')
+# Source: contribDB_{cycle}_organizational.parquet
+ORGANIZATIONAL_COLUMNS: Final[list[str]] = ALL_COLUMNS
+
+# Schema for recipient_aggregates table from paper-trail-data
+# Pre-computed aggregations of contribution data by recipient
+# Source: recipient_aggregates_{cycle}.parquet
+RECIPIENT_AGGREGATES_COLUMNS: Final[list[str]] = [
+    "bonica.rid",
+    "recipient.name",
+    "recipient.party",
+    "recipient.type",
+    "recipient.state",
+    "candidate.cfscore",
+    "total_amount",
+    "avg_amount",
+    "contribution_count",
+    "individual_total",
+    "individual_count",
+    "organizational_total",
+    "organizational_count",
+]
+
 
 def create_schema(
     conn, table_name: str = "contributions", columns: list[str] | None = None
