@@ -4,7 +4,7 @@ import click
 
 from .filters import AmountFilter, CycleFilter, StateFilter, recent_cycles
 from .loader import get_table_info, load_to_duckdb, query_database
-from .paper_trail_loader import load_paper_trail_to_postgres
+from .paper_trail_loader import DatasetType, load_paper_trail_to_postgres
 from .postgres_loader import load_to_postgres
 
 
@@ -341,11 +341,11 @@ def load_paper_trail(
         filters.append(recent_cycles(recent))
 
     # Normalize datasets
-    dataset_list: list[str] = []
+    dataset_list: list[DatasetType] = []
     if "all" in datasets or not datasets:
         dataset_list = ["legislators", "organizational", "recipient_aggregates"]
     else:
-        dataset_list = list(datasets)
+        dataset_list = list(datasets)  # type: ignore[arg-type]
 
     # Show what we're doing
     click.echo("Loading paper-trail-data into PostgreSQL")
