@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 import duckdb
 import psycopg
 from psycopg import sql
-from tqdm import tqdm
 
 from .filters import CycleFilter, Filter
 from .schema import (
@@ -37,12 +36,8 @@ PAPER_TRAIL_BASE_URL = "https://huggingface.co/datasets/Dustinhax/paper-trail-da
 
 # URL patterns for each dataset
 LEGISLATORS_URL = f"{PAPER_TRAIL_BASE_URL}/distinct_legislators.parquet"
-ORGANIZATIONAL_URL_PATTERN = (
-    f"{PAPER_TRAIL_BASE_URL}/dime/contributions/organizational/contribDB_{{cycle}}_organizational.parquet"
-)
-RECIPIENT_AGGREGATES_URL_PATTERN = (
-    f"{PAPER_TRAIL_BASE_URL}/dime/contributions/recipient_aggregates/recipient_aggregates_{{cycle}}.parquet"
-)
+ORGANIZATIONAL_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/organizational/contribDB_{{cycle}}_organizational.parquet"
+RECIPIENT_AGGREGATES_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/recipient_aggregates/recipient_aggregates_{{cycle}}.parquet"
 
 # Available election cycles (even years 1980-2024)
 AVAILABLE_CYCLES = list(range(1980, 2026, 2))
@@ -68,7 +63,9 @@ class PaperTrailLoadResult:
     @property
     def total_rows_loaded(self) -> int:
         """Total rows loaded across all tables."""
-        return self.legislators_loaded + self.organizational_loaded + self.recipient_aggregates_loaded
+        return (
+            self.legislators_loaded + self.organizational_loaded + self.recipient_aggregates_loaded
+        )
 
 
 def _get_organizational_url(cycle: int) -> str:
@@ -359,20 +356,19 @@ def _load_organizational_contributions(
 
             cycle_rows = 0
             batch_count = 0
-            with pg_conn.cursor() as cur:
-                with cur.copy(copy_sql) as copy:
-                    while True:
-                        rows = result.fetchmany(batch_size)
-                        if not rows:
-                            break
+            with pg_conn.cursor() as cur, cur.copy(copy_sql) as copy:
+                while True:
+                    rows = result.fetchmany(batch_size)
+                    if not rows:
+                        break
 
-                        for row in rows:
-                            copy.write_row(row)
-                            cycle_rows += 1
+                    for row in rows:
+                        copy.write_row(row)
+                        cycle_rows += 1
 
-                        batch_count += 1
-                        if show_progress and batch_count % 10 == 0:
-                            print(f"    {cycle_rows:,} rows...", end="\r")
+                    batch_count += 1
+                    if show_progress and batch_count % 10 == 0:
+                        print(f"    {cycle_rows:,} rows...", end="\r")
 
             pg_conn.commit()
             rows_loaded += cycle_rows
@@ -435,23 +431,22 @@ def _load_recipient_aggregates(
             )
 
             cycle_rows = 0
-            with pg_conn.cursor() as cur:
-                with cur.copy(copy_sql) as copy:
-                    while True:
-                        rows = result.fetchmany(batch_size)
-                        if not rows:
-                            break
+            with pg_conn.cursor() as cur, cur.copy(copy_sql) as copy:
+                while True:
+                    rows = result.fetchmany(batch_size)
+                    if not rows:
+                        break
 
-                        for row in rows:
-                            # Prepend cycle to row data
-                            copy.write_row((cycle,) + row)
-                            cycle_rows += 1
-
-                            if limit and rows_loaded + cycle_rows >= limit:
-                                break
+                    for row in rows:
+                        # Prepend cycle to row data
+                        copy.write_row((cycle, *row))
+                        cycle_rows += 1
 
                         if limit and rows_loaded + cycle_rows >= limit:
                             break
+
+                    if limit and rows_loaded + cycle_rows >= limit:
+                        break
 
             pg_conn.commit()
             rows_loaded += cycle_rows
