@@ -47,7 +47,7 @@ RECIPIENT_AGGREGATES_URL_PATTERN = (
 # Available election cycles (even years 1980-2024)
 AVAILABLE_CYCLES = list(range(1980, 2026, 2))
 
-DEFAULT_BATCH_SIZE = 10_000
+DEFAULT_BATCH_SIZE = 100_000  # Large batches for COPY performance
 
 # Dataset type literals
 DatasetType = Literal["legislators", "organizational", "recipient_aggregates", "all"]
@@ -319,74 +319,74 @@ def _load_organizational_contributions(
     limit: int | None = None,
     show_progress: bool = True,
 ) -> int:
-    """Load organizational contributions for specified cycles."""
+    """Load organizational contributions for specified cycles.
+
+    Uses PostgreSQL COPY protocol for 10-100x faster bulk inserts.
+    """
     _create_organizational_schema(pg_conn, table_name)
 
     pg_cols = [_sanitize_column_name(col) for col in ORGANIZATIONAL_COLUMNS]
-    insert_sql = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
-        sql.Identifier(table_name),
-        sql.SQL(", ").join(sql.Identifier(c) for c in pg_cols),
-        sql.SQL(", ").join(sql.Placeholder() for _ in pg_cols),
-    )
-
     col_select = ", ".join(f'"{col}"' for col in ORGANIZATIONAL_COLUMNS)
 
     rows_loaded = 0
-    cycles_to_process = cycles
 
     if show_progress:
         print(f"Loading organizational_contributions for {len(cycles)} cycle(s)")
-        cycles_to_process = tqdm(cycles, desc="Loading organizational", unit=" cycle")
 
-    try:
-        for cycle in cycles_to_process:
-            url = _get_organizational_url(cycle)
-            query_sql = f'SELECT {col_select} FROM read_parquet("{url}")'
+    for cycle in cycles:
+        url = _get_organizational_url(cycle)
 
-            if limit:
-                remaining = limit - rows_loaded
-                if remaining <= 0:
-                    break
-                query_sql += f" LIMIT {remaining}"
+        # Calculate how many rows we'll load for this cycle
+        remaining = (limit - rows_loaded) if limit else None
+        if remaining is not None and remaining <= 0:
+            break
 
-            try:
-                result = duck_conn.execute(query_sql)
-                batch = []
+        query_sql = f'SELECT {col_select} FROM read_parquet("{url}")'
+        if remaining:
+            query_sql += f" LIMIT {remaining}"
 
-                while True:
-                    row = result.fetchone()
-                    if row is None:
-                        break
+        if show_progress:
+            print(f"  Cycle {cycle}: loading{f' up to {remaining:,}' if remaining else ''}...")
 
-                    batch.append(row)
+        try:
+            result = duck_conn.execute(query_sql)
 
-                    if len(batch) >= batch_size:
-                        with pg_conn.cursor() as cur:
-                            cur.executemany(insert_sql, batch)
-                        pg_conn.commit()
-                        rows_loaded += len(batch)
-                        batch = []
+            # Use COPY protocol for bulk insert (much faster than executemany)
+            copy_sql = sql.SQL("COPY {} ({}) FROM STDIN").format(
+                sql.Identifier(table_name),
+                sql.SQL(", ").join(sql.Identifier(c) for c in pg_cols),
+            )
 
-                        if limit and rows_loaded >= limit:
+            cycle_rows = 0
+            batch_count = 0
+            with pg_conn.cursor() as cur:
+                with cur.copy(copy_sql) as copy:
+                    while True:
+                        rows = result.fetchmany(batch_size)
+                        if not rows:
                             break
 
-                if batch:
-                    with pg_conn.cursor() as cur:
-                        cur.executemany(insert_sql, batch)
-                    pg_conn.commit()
-                    rows_loaded += len(batch)
+                        for row in rows:
+                            copy.write_row(row)
+                            cycle_rows += 1
 
-            except duckdb.HTTPException as e:
-                if show_progress:
-                    print(f"  Warning: Could not load cycle {cycle}: {e}")
-                continue
+                        batch_count += 1
+                        if show_progress and batch_count % 10 == 0:
+                            print(f"    {cycle_rows:,} rows...", end="\r")
 
-            if limit and rows_loaded >= limit:
-                break
+            pg_conn.commit()
+            rows_loaded += cycle_rows
 
-    finally:
-        if show_progress and isinstance(cycles_to_process, tqdm):
-            cycles_to_process.close()
+            if show_progress:
+                print(f"  Cycle {cycle}: {cycle_rows:,} rows loaded")
+
+        except duckdb.HTTPException as e:
+            if show_progress:
+                print(f"  Warning: Could not load cycle {cycle}: {e}")
+            continue
+
+        if limit and rows_loaded >= limit:
+            break
 
     return rows_loaded
 
@@ -400,76 +400,72 @@ def _load_recipient_aggregates(
     limit: int | None = None,
     show_progress: bool = True,
 ) -> int:
-    """Load recipient aggregates for specified cycles."""
+    """Load recipient aggregates for specified cycles.
+
+    Uses PostgreSQL COPY protocol for faster bulk inserts.
+    """
     _create_recipient_aggregates_schema(pg_conn, table_name)
 
     # Include cycle as first column after id
     pg_cols = ["cycle"] + [_sanitize_column_name(col) for col in RECIPIENT_AGGREGATES_COLUMNS]
-    insert_sql = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
-        sql.Identifier(table_name),
-        sql.SQL(", ").join(sql.Identifier(c) for c in pg_cols),
-        sql.SQL(", ").join(sql.Placeholder() for _ in pg_cols),
-    )
-
     col_select = ", ".join(f'"{col}"' for col in RECIPIENT_AGGREGATES_COLUMNS)
 
     rows_loaded = 0
-    cycles_to_process = cycles
 
     if show_progress:
         print(f"Loading recipient_aggregates for {len(cycles)} cycle(s)")
-        cycles_to_process = tqdm(cycles, desc="Loading aggregates", unit=" cycle")
 
-    try:
-        for cycle in cycles_to_process:
-            url = _get_recipient_aggregates_url(cycle)
-            query_sql = f'SELECT {col_select} FROM read_parquet("{url}")'
+    for cycle in cycles:
+        url = _get_recipient_aggregates_url(cycle)
+        query_sql = f'SELECT {col_select} FROM read_parquet("{url}")'
 
-            if limit:
-                remaining = limit - rows_loaded
-                if remaining <= 0:
-                    break
-                query_sql += f" LIMIT {remaining}"
+        if limit:
+            remaining = limit - rows_loaded
+            if remaining <= 0:
+                break
+            query_sql += f" LIMIT {remaining}"
 
-            try:
-                result = duck_conn.execute(query_sql)
-                batch = []
+        try:
+            result = duck_conn.execute(query_sql)
 
-                while True:
-                    row = result.fetchone()
-                    if row is None:
-                        break
+            # Use COPY protocol for bulk insert
+            copy_sql = sql.SQL("COPY {} ({}) FROM STDIN").format(
+                sql.Identifier(table_name),
+                sql.SQL(", ").join(sql.Identifier(c) for c in pg_cols),
+            )
 
-                    # Prepend cycle to row data
-                    batch.append((cycle,) + row)
-
-                    if len(batch) >= batch_size:
-                        with pg_conn.cursor() as cur:
-                            cur.executemany(insert_sql, batch)
-                        pg_conn.commit()
-                        rows_loaded += len(batch)
-                        batch = []
-
-                        if limit and rows_loaded >= limit:
+            cycle_rows = 0
+            with pg_conn.cursor() as cur:
+                with cur.copy(copy_sql) as copy:
+                    while True:
+                        rows = result.fetchmany(batch_size)
+                        if not rows:
                             break
 
-                if batch:
-                    with pg_conn.cursor() as cur:
-                        cur.executemany(insert_sql, batch)
-                    pg_conn.commit()
-                    rows_loaded += len(batch)
+                        for row in rows:
+                            # Prepend cycle to row data
+                            copy.write_row((cycle,) + row)
+                            cycle_rows += 1
 
-            except duckdb.HTTPException as e:
-                if show_progress:
-                    print(f"  Warning: Could not load cycle {cycle}: {e}")
-                continue
+                            if limit and rows_loaded + cycle_rows >= limit:
+                                break
 
-            if limit and rows_loaded >= limit:
-                break
+                        if limit and rows_loaded + cycle_rows >= limit:
+                            break
 
-    finally:
-        if show_progress and isinstance(cycles_to_process, tqdm):
-            cycles_to_process.close()
+            pg_conn.commit()
+            rows_loaded += cycle_rows
+
+            if show_progress:
+                print(f"  Cycle {cycle}: {cycle_rows:,} rows loaded")
+
+        except duckdb.HTTPException as e:
+            if show_progress:
+                print(f"  Warning: Could not load cycle {cycle}: {e}")
+            continue
+
+        if limit and rows_loaded >= limit:
+            break
 
     return rows_loaded
 
@@ -543,6 +539,7 @@ def load_paper_trail_to_postgres(
     # Connect to databases
     pg_conn = psycopg.connect(database_url)
     duck_conn = duckdb.connect()
+    duck_conn.execute("SET enable_progress_bar = false")
 
     legislators_loaded = 0
     organizational_loaded = 0
