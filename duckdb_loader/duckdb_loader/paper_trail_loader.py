@@ -16,7 +16,10 @@ Data source: https://huggingface.co/datasets/Dustinhax/paper-trail-data
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, cast
+
+if TYPE_CHECKING:
+    from typing import LiteralString
 
 import duckdb
 import psycopg
@@ -145,7 +148,8 @@ def _build_column_def(col: str, type_func: Callable[[str], str]) -> sql.Composed
         sql.Composed representing '"sanitized_name" TYPE'
     """
     sanitized = _sanitize_column_name(col)
-    pg_type = type_func(col)
+    # Type comes from fixed internal map, safe to cast to LiteralString
+    pg_type = cast("LiteralString", type_func(col))
     return sql.SQL("{} {}").format(sql.Identifier(sanitized), sql.SQL(pg_type))
 
 
