@@ -93,6 +93,7 @@ ALL_COLUMNS: Final[list[str]] = [
 # Contains unique legislators from Voteview data (~2,303 rows)
 LEGISLATORS_COLUMNS: Final[list[str]] = [
     "bioguide_id",
+    "icpsr",  # Cross-reference ID for DIME linkage via crosswalk table
     "bioname",
     "state_abbrev",
     "party_code",
@@ -101,6 +102,19 @@ LEGISLATORS_COLUMNS: Final[list[str]] = [
     "last_congress",
     "nominate_dim1",
     "nominate_dim2",
+]
+
+# Schema for legislator_recipient_crosswalk table from paper-trail-data
+# Maps legislators (via ICPSR) to DIME recipients (bonica_rid)
+# Source: https://huggingface.co/datasets/Dustinhax/paper-trail-data/resolve/main/legislator_crosswalk.parquet
+CROSSWALK_COLUMNS: Final[list[str]] = [
+    "icpsr",
+    "bonica_rid",
+    "recipient_name",
+    "party",
+    "state",
+    "seat",
+    "fec_id",
 ]
 
 # Schema for organizational_contributions table from paper-trail-data

@@ -29,6 +29,7 @@ from psycopg import sql
 from .filters import CycleFilter, Filter
 from .schema import (
     AVAILABLE_CYCLES,
+    CROSSWALK_COLUMNS,
     LEGISLATORS_COLUMNS,
     ORGANIZATIONAL_COLUMNS,
     RECIPIENT_AGGREGATES_COLUMNS,
@@ -39,13 +40,14 @@ PAPER_TRAIL_BASE_URL = "https://huggingface.co/datasets/Dustinhax/paper-trail-da
 
 # URL patterns for each dataset
 LEGISLATORS_URL = f"{PAPER_TRAIL_BASE_URL}/distinct_legislators.parquet"
+CROSSWALK_URL = f"{PAPER_TRAIL_BASE_URL}/legislator_crosswalk.parquet"
 ORGANIZATIONAL_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/organizational/contribDB_{{cycle}}_organizational.parquet"
 RECIPIENT_AGGREGATES_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/recipient_aggregates/recipient_aggregates_{{cycle}}.parquet"
 
 DEFAULT_BATCH_SIZE = 100_000  # Large batches for COPY performance
 
 # Dataset type literals
-DatasetType = Literal["legislators", "organizational", "recipient_aggregates", "all"]
+DatasetType = Literal["legislators", "crosswalk", "organizational", "recipient_aggregates", "all"]
 
 
 @dataclass
@@ -53,6 +55,7 @@ class PaperTrailLoadResult:
     """Result of a paper-trail-data load operation."""
 
     legislators_loaded: int
+    crosswalk_loaded: int
     organizational_loaded: int
     recipient_aggregates_loaded: int
     database_url: str
@@ -64,7 +67,10 @@ class PaperTrailLoadResult:
     def total_rows_loaded(self) -> int:
         """Total rows loaded across all tables."""
         return (
-            self.legislators_loaded + self.organizational_loaded + self.recipient_aggregates_loaded
+            self.legislators_loaded
+            + self.crosswalk_loaded
+            + self.organizational_loaded
+            + self.recipient_aggregates_loaded
         )
 
 
@@ -94,6 +100,7 @@ def _sanitize_column_name(col: str) -> str:
 def _get_postgres_column_type_legislators(col: str) -> str:
     """Map legislator column names to PostgreSQL types."""
     type_map = {
+        "icpsr": "INTEGER",
         "party_code": "INTEGER",
         "first_congress": "INTEGER",
         "last_congress": "INTEGER",
@@ -102,6 +109,14 @@ def _get_postgres_column_type_legislators(col: str) -> str:
         "congresses_served": "INTEGER[]",
     }
     return type_map.get(col, "TEXT")
+
+
+def _get_postgres_column_type_crosswalk(_col: str) -> str:
+    """Map crosswalk column names to PostgreSQL types.
+
+    All columns are TEXT since ICPSR in DIME is stored as string.
+    """
+    return "TEXT"
 
 
 def _get_postgres_column_type_organizational(col: str) -> str:
@@ -204,6 +219,7 @@ def _create_legislators_indexes(
     """Create indexes on distinct_legislators table."""
     indexes = [
         ("idx_leg_bioguide_id", "bioguide_id"),
+        ("idx_leg_icpsr", "icpsr"),
         ("idx_leg_state_abbrev", "state_abbrev"),
         ("idx_leg_party_code", "party_code"),
     ]
@@ -269,6 +285,92 @@ def _create_recipient_aggregates_indexes(
             # Column or table may not exist if user selected subset
             pass
     conn.commit()
+
+
+def _create_crosswalk_schema(
+    conn: psycopg.Connection, table_name: str = "legislator_recipient_crosswalk"
+) -> None:
+    """Create the legislator_recipient_crosswalk table in PostgreSQL."""
+    col_defs = [
+        _build_column_def(col, _get_postgres_column_type_crosswalk) for col in CROSSWALK_COLUMNS
+    ]
+    create_sql = sql.SQL(
+        "CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY, {}, UNIQUE(icpsr, bonica_rid))"
+    ).format(sql.Identifier(table_name), sql.SQL(", ").join(col_defs))
+    conn.execute(create_sql)
+    conn.commit()
+
+
+def _create_crosswalk_indexes(
+    conn: psycopg.Connection, table_name: str = "legislator_recipient_crosswalk"
+) -> None:
+    """Create indexes on legislator_recipient_crosswalk table."""
+    indexes = [
+        ("idx_xwalk_icpsr", "icpsr"),
+        ("idx_xwalk_bonica_rid", "bonica_rid"),
+    ]
+    for idx_name, col in indexes:
+        try:
+            create_idx_sql = sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} ({})").format(
+                sql.Identifier(idx_name),
+                sql.Identifier(table_name),
+                sql.Identifier(col),
+            )
+            conn.execute(create_idx_sql)
+        except (pg_errors.UndefinedColumn, pg_errors.UndefinedTable):
+            # Column or table may not exist if user selected subset
+            pass
+    conn.commit()
+
+
+def _load_crosswalk(
+    pg_conn: psycopg.Connection,
+    duck_conn: duckdb.DuckDBPyConnection,
+    table_name: str = "legislator_recipient_crosswalk",
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    show_progress: bool = True,
+) -> int:
+    """Load legislator_recipient_crosswalk table (always loads full file)."""
+    _create_crosswalk_schema(pg_conn, table_name)
+
+    pg_cols = [_sanitize_column_name(col) for col in CROSSWALK_COLUMNS]
+    insert_sql = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+        sql.Identifier(table_name),
+        sql.SQL(", ").join(sql.Identifier(c) for c in pg_cols),
+        sql.SQL(", ").join(sql.Placeholder() for _ in pg_cols),
+    )
+
+    col_select = ", ".join(f'"{col}"' for col in CROSSWALK_COLUMNS)
+    query_sql = f'SELECT {col_select} FROM read_parquet("{CROSSWALK_URL}")'
+
+    if show_progress:
+        print(f"Loading legislator_recipient_crosswalk from {CROSSWALK_URL}")
+
+    rows_loaded = 0
+    result = duck_conn.execute(query_sql)
+    batch = []
+
+    while True:
+        row = result.fetchone()
+        if row is None:
+            break
+
+        batch.append(row)
+
+        if len(batch) >= batch_size:
+            with pg_conn.cursor() as cur:
+                cur.executemany(insert_sql, batch)
+            pg_conn.commit()
+            rows_loaded += len(batch)
+            batch = []
+
+    if batch:
+        with pg_conn.cursor() as cur:
+            cur.executemany(insert_sql, batch)
+        pg_conn.commit()
+        rows_loaded += len(batch)
+
+    return rows_loaded
 
 
 def _load_legislators(
@@ -496,26 +598,29 @@ def load_paper_trail_to_postgres(
     show_progress: bool = True,
     create_indexes_after: bool = True,
     legislators_table: str = "distinct_legislators",
+    crosswalk_table: str = "legislator_recipient_crosswalk",
     organizational_table: str = "organizational_contributions",
     recipient_aggregates_table: str = "recipient_aggregates",
 ) -> PaperTrailLoadResult:
     """Load paper-trail-data from Huggingface into PostgreSQL.
 
-    Loads three processed datasets:
+    Loads four processed datasets:
     - distinct_legislators: ~2,303 unique legislators from Voteview
+    - legislator_recipient_crosswalk: Maps legislators (icpsr) to DIME recipients (bonica_rid)
     - organizational_contributions: DIME contributions from organizational donors
     - recipient_aggregates: Pre-computed contribution totals by recipient
 
     Args:
         database_url: PostgreSQL connection URL
-        datasets: Which datasets to load ("legislators", "organizational",
+        datasets: Which datasets to load ("legislators", "crosswalk", "organizational",
                   "recipient_aggregates", "all", or list of these)
         filters: List of filters to apply (CycleFilter for cycle selection)
-        limit: Maximum rows per dataset (legislators always loads full)
+        limit: Maximum rows per dataset (legislators/crosswalk always load full)
         batch_size: Rows per batch insert (default: 10,000)
         show_progress: Show progress bars
         create_indexes_after: Create indexes after loading
         legislators_table: Table name for legislators (default: distinct_legislators)
+        crosswalk_table: Table name for crosswalk (default: legislator_recipient_crosswalk)
         organizational_table: Table name for organizational (default: organizational_contributions)
         recipient_aggregates_table: Table name for aggregates (default: recipient_aggregates)
 
@@ -526,7 +631,7 @@ def load_paper_trail_to_postgres(
         >>> from duckdb_loader import load_paper_trail_to_postgres, CycleFilter
         >>> result = load_paper_trail_to_postgres(
         ...     "postgresql://localhost/papertrail",
-        ...     datasets=["legislators", "recipient_aggregates"],
+        ...     datasets=["legislators", "crosswalk", "recipient_aggregates"],
         ...     filters=[CycleFilter([2022, 2024])],
         ... )
         >>> print(f"Loaded {result.total_rows_loaded:,} total rows")
@@ -534,11 +639,11 @@ def load_paper_trail_to_postgres(
     filters = filters or []
 
     # Normalize datasets to list
-    valid_datasets = {"legislators", "organizational", "recipient_aggregates", "all"}
+    valid_datasets = {"legislators", "crosswalk", "organizational", "recipient_aggregates", "all"}
     dataset_list: list[str]
     if isinstance(datasets, str):
         if datasets == "all":
-            dataset_list = ["legislators", "organizational", "recipient_aggregates"]
+            dataset_list = ["legislators", "crosswalk", "organizational", "recipient_aggregates"]
         else:
             dataset_list = [datasets]
     else:
@@ -566,6 +671,7 @@ def load_paper_trail_to_postgres(
     duck_conn.execute("SET enable_progress_bar = false")
 
     legislators_loaded = 0
+    crosswalk_loaded = 0
     organizational_loaded = 0
     recipient_aggregates_loaded = 0
     tables_created: list[str] = []
@@ -585,6 +691,21 @@ def load_paper_trail_to_postgres(
                 if show_progress:
                     print("Creating legislators indexes...")
                 _create_legislators_indexes(pg_conn, legislators_table)
+
+        # Load crosswalk (always full, no cycle filtering)
+        if "crosswalk" in dataset_list:
+            crosswalk_loaded = _load_crosswalk(
+                pg_conn,
+                duck_conn,
+                table_name=crosswalk_table,
+                batch_size=batch_size,
+                show_progress=show_progress,
+            )
+            tables_created.append(crosswalk_table)
+            if create_indexes_after and crosswalk_loaded > 0:
+                if show_progress:
+                    print("Creating crosswalk indexes...")
+                _create_crosswalk_indexes(pg_conn, crosswalk_table)
 
         # Load organizational contributions
         if "organizational" in dataset_list:
@@ -626,6 +747,7 @@ def load_paper_trail_to_postgres(
 
     return PaperTrailLoadResult(
         legislators_loaded=legislators_loaded,
+        crosswalk_loaded=crosswalk_loaded,
         organizational_loaded=organizational_loaded,
         recipient_aggregates_loaded=recipient_aggregates_loaded,
         database_url=database_url.split("@")[-1] if "@" in database_url else database_url,

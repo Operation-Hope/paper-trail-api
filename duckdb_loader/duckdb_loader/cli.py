@@ -265,7 +265,9 @@ def load_postgres(
     "--datasets",
     "-d",
     multiple=True,
-    type=click.Choice(["legislators", "organizational", "recipient_aggregates", "all"]),
+    type=click.Choice(
+        ["legislators", "crosswalk", "organizational", "recipient_aggregates", "all"]
+    ),
     default=["all"],
     help="Dataset(s) to load (default: all)",
 )
@@ -316,8 +318,9 @@ def load_paper_trail(
     DATABASE_URL is the PostgreSQL connection string. Can also be set via
     the DATABASE_URL environment variable.
 
-    Loads three datasets from Dustinhax/paper-trail-data:
+    Loads four datasets from Dustinhax/paper-trail-data:
     - distinct_legislators: Unique legislators from Voteview (~2,303 rows)
+    - legislator_recipient_crosswalk: Maps legislators to DIME recipient IDs
     - organizational_contributions: DIME contributions from organizational donors
     - recipient_aggregates: Pre-computed contribution aggregations by recipient
 
@@ -326,8 +329,8 @@ def load_paper_trail(
         # Load all datasets for 2024 cycle
         duckdb-loader load-paper-trail $DATABASE_URL -c 2024
 
-        # Load only legislators and aggregates
-        duckdb-loader load-paper-trail $DATABASE_URL -d legislators -d recipient_aggregates
+        # Load only legislators and crosswalk
+        duckdb-loader load-paper-trail $DATABASE_URL -d legislators -d crosswalk
 
         # Load last 4 cycles of organizational contributions
         duckdb-loader load-paper-trail $DATABASE_URL -d organizational --recent 4
@@ -343,7 +346,7 @@ def load_paper_trail(
     # Normalize datasets
     dataset_list: list[DatasetType] = []
     if "all" in datasets or not datasets:
-        dataset_list = ["legislators", "organizational", "recipient_aggregates"]
+        dataset_list = ["legislators", "crosswalk", "organizational", "recipient_aggregates"]
     else:
         dataset_list = list(datasets)  # type: ignore[arg-type]
 
@@ -371,6 +374,7 @@ def load_paper_trail(
     click.echo()
     click.echo("Load complete:")
     click.echo(f"  distinct_legislators: {result.legislators_loaded:,} rows")
+    click.echo(f"  legislator_recipient_crosswalk: {result.crosswalk_loaded:,} rows")
     click.echo(f"  organizational_contributions: {result.organizational_loaded:,} rows")
     click.echo(f"  recipient_aggregates: {result.recipient_aggregates_loaded:,} rows")
     click.echo(f"  Total: {result.total_rows_loaded:,} rows")

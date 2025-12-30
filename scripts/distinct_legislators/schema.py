@@ -55,6 +55,8 @@ DISTINCT_LEGISLATORS_SCHEMA = pa.schema(
     [
         # Primary identifier
         pa.field("bioguide_id", pa.string(), nullable=False),
+        # Cross-reference identifier for DIME linkage
+        pa.field("icpsr", pa.int32()),  # Links to DIME Recipients via ICPSR
         # Biographical info (most recent values)
         pa.field("bioname", pa.string()),
         pa.field("state_abbrev", pa.string()),
@@ -71,6 +73,7 @@ DISTINCT_LEGISLATORS_SCHEMA = pa.schema(
 
 DISTINCT_LEGISLATORS_COLUMNS = [
     "bioguide_id",
+    "icpsr",
     "bioname",
     "state_abbrev",
     "party_code",
@@ -91,6 +94,7 @@ KEY_COLUMNS = ["bioguide_id", "first_congress", "last_congress"]
 AGGREGATION_QUERY = """
 SELECT
     bioguide_id,
+    LAST(icpsr ORDER BY congress)::INTEGER as icpsr,
     LAST(bioname ORDER BY congress) as bioname,
     LAST(state_abbrev ORDER BY congress) as state_abbrev,
     LAST(party_code ORDER BY congress) as party_code,
@@ -127,6 +131,7 @@ DATA_INTERPRETATION = """
 | Field | Aggregation | Rationale |
 |-------|-------------|-----------|
 | bioguide_id | GROUP BY | Primary key, unique per legislator |
+| icpsr | LAST by congress | ICPSR identifier for DIME cross-reference |
 | bioname | LAST by congress | Name format may change; use most recent |
 | state_abbrev | LAST by congress | Legislators may change states (rare) |
 | party_code | LAST by congress | Party affiliation may change over career |
