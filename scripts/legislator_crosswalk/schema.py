@@ -17,6 +17,10 @@ ALLOWED_SOURCE_DOMAINS: Final[list[str]] = [
     "huggingface.co",
 ]
 
+# DIME stores ICPSR as "{icpsr}{year}" (e.g., "100751980" = ICPSR 10075 + year 1980)
+# We extract just the ICPSR portion by removing the last YEAR_SUFFIX_LENGTH characters
+YEAR_SUFFIX_LENGTH: Final[int] = 4
+
 
 def validate_source_url(url: str) -> bool:
     """Check if source URL is from an allowed domain.
@@ -73,24 +77,24 @@ KEY_COLUMNS: Final[list[str]] = ["icpsr", "bonica_rid"]
 # Each row represents one DIME recipient record for a legislator
 #
 # NOTE: DIME stores ICPSR as "{icpsr}{year}" (e.g., "100751980" = ICPSR 10075 + year 1980)
-# We extract just the ICPSR portion by removing the last 4 characters (the year)
+# We extract just the ICPSR portion by removing the last YEAR_SUFFIX_LENGTH characters (the year)
 #
 # Uses GROUP BY on (icpsr, bonica_rid) to get one row per unique pair,
 # taking arbitrary values for metadata columns (FIRST_VALUE or ANY_VALUE would also work)
-EXTRACTION_QUERY = """
+EXTRACTION_QUERY = f"""
 WITH extracted AS (
     SELECT
-        SUBSTRING(CAST("ICPSR" AS VARCHAR), 1, LENGTH(CAST("ICPSR" AS VARCHAR))-4) as icpsr,
+        SUBSTRING(CAST("ICPSR" AS VARCHAR), 1, LENGTH(CAST("ICPSR" AS VARCHAR))-{YEAR_SUFFIX_LENGTH}) as icpsr,
         "bonica.rid" as bonica_rid,
         "name" as recipient_name,
         "party",
         "state",
         "seat",
         "FEC.ID" as fec_id
-    FROM read_parquet('{source_url}')
+    FROM read_parquet('{{source_url}}')
     WHERE "ICPSR" IS NOT NULL
       AND "ICPSR" != ''
-      AND LENGTH(CAST("ICPSR" AS VARCHAR)) > 4
+      AND LENGTH(CAST("ICPSR" AS VARCHAR)) > {YEAR_SUFFIX_LENGTH}
       AND "bonica.rid" IS NOT NULL
       AND "bonica.rid" != ''
 )

@@ -74,9 +74,7 @@ def extract_crosswalk(
             allowed_domains=ALLOWED_SOURCE_DOMAINS,
         )
 
-    conn = duckdb.connect()
-
-    try:
+    with duckdb.connect() as conn:
         # Step 1: Count source rows
         print(f"Reading from: {source_url}")
         try:
@@ -158,6 +156,3 @@ def extract_crosswalk(
             unique_bonica_rid_count=unique_bonica_rid,
             validation=validation,
         )
-
-    finally:
-        conn.close()

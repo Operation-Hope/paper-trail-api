@@ -65,9 +65,9 @@ Examples:
         print(f"  Crosswalk rows: {result.output_count:,}")
         print(f"  Unique legislators (ICPSR): {result.unique_icpsr_count:,}")
         print(f"  Unique recipients (bonica_rid): {result.unique_bonica_rid_count:,}")
-        print(
-            f"  Avg recipients per legislator: {result.unique_bonica_rid_count / result.unique_icpsr_count:.1f}"
-        )
+        if result.unique_icpsr_count > 0:
+            avg = result.unique_bonica_rid_count / result.unique_icpsr_count
+            print(f"  Avg recipients per legislator: {avg:.1f}")
 
         if args.no_validate:
             print("  Validation: SKIPPED")

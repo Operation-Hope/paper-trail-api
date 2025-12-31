@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     import duckdb
 
 from .exceptions import DuplicateKeyError, ValidationError
+from .schema import YEAR_SUFFIX_LENGTH
 
 
 @dataclass
@@ -58,13 +59,13 @@ def validate_counts(
     # Note: DIME stores ICPSR as "{icpsr}{year}", we extract just the ICPSR portion
     source_count = conn.execute(f"""
         SELECT COUNT(DISTINCT (
-            SUBSTRING(CAST("ICPSR" AS VARCHAR), 1, LENGTH(CAST("ICPSR" AS VARCHAR))-4),
+            SUBSTRING(CAST("ICPSR" AS VARCHAR), 1, LENGTH(CAST("ICPSR" AS VARCHAR))-{YEAR_SUFFIX_LENGTH}),
             "bonica.rid"
         ))
         FROM read_parquet('{source_url}')
         WHERE "ICPSR" IS NOT NULL
           AND "ICPSR" != ''
-          AND LENGTH(CAST("ICPSR" AS VARCHAR)) > 4
+          AND LENGTH(CAST("ICPSR" AS VARCHAR)) > {YEAR_SUFFIX_LENGTH}
           AND "bonica.rid" IS NOT NULL
           AND "bonica.rid" != ''
     """).fetchone()[0]
@@ -194,13 +195,17 @@ def validate_sample(
     for icpsr, bonica_rid in sample:
         # Verify this mapping exists in source
         # Note: DIME stores ICPSR as "{icpsr}{year}", so we compare the extracted portion
-        source_exists = conn.execute(f"""
+        # Use parameterized query to prevent SQL injection from malicious parquet data
+        source_exists = conn.execute(
+            f"""
             SELECT 1
             FROM read_parquet('{source_url}')
-            WHERE SUBSTRING(CAST("ICPSR" AS VARCHAR), 1, LENGTH(CAST("ICPSR" AS VARCHAR))-4) = '{icpsr}'
-              AND "bonica.rid" = '{bonica_rid}'
+            WHERE SUBSTRING(CAST("ICPSR" AS VARCHAR), 1, LENGTH(CAST("ICPSR" AS VARCHAR))-{YEAR_SUFFIX_LENGTH}) = ?
+              AND "bonica.rid" = ?
             LIMIT 1
-        """).fetchone()
+            """,
+            [icpsr, bonica_rid],
+        ).fetchone()
 
         if source_exists is None:
             raise ValidationError(
