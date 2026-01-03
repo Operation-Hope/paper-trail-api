@@ -68,7 +68,8 @@ Load pre-processed datasets from [Dustinhax/paper-trail-data](https://huggingfac
 
 | Dataset | Description | Size |
 |---------|-------------|------|
-| `legislators` | Unique legislators from Voteview | ~2,300 rows |
+| `legislators` | Unique legislators from Voteview (includes icpsr) | ~2,300 rows |
+| `crosswalk` | Maps legislators (icpsr) to DIME recipient IDs (bonica_rid) | ~426k rows |
 | `organizational` | Organizational donor contributions only | ~15M rows/cycle |
 | `recipient_aggregates` | Pre-computed totals by recipient | ~20k rows/cycle |
 
@@ -83,7 +84,41 @@ duckdb-loader load-paper-trail $DATABASE_URL -d legislators
 duckdb-loader load-paper-trail $DATABASE_URL -d organizational --recent 4
 
 # Load specific datasets
-duckdb-loader load-paper-trail $DATABASE_URL -d legislators -d recipient_aggregates -c 2024
+duckdb-loader load-paper-trail $DATABASE_URL -d legislators -d crosswalk -d recipient_aggregates -c 2024
+```
+
+#### Linking Legislators to Contributions
+
+The crosswalk table enables joining legislators to their campaign contributions:
+
+```
+distinct_legislators.icpsr → crosswalk.icpsr → crosswalk.bonica_rid → contributions.bonica_rid
+```
+
+```sql
+-- Get total contributions per legislator
+SELECT
+    l.bioname,
+    l.state_abbrev,
+    COUNT(*) as contribution_count,
+    SUM(oc.amount) as total_amount
+FROM distinct_legislators l
+JOIN legislator_recipient_crosswalk x ON CAST(l.icpsr AS VARCHAR) = x.icpsr
+JOIN organizational_contributions oc ON x.bonica_rid = oc.bonica_rid
+GROUP BY l.bioname, l.state_abbrev
+ORDER BY total_amount DESC
+LIMIT 10;
+
+-- Or use pre-computed aggregates
+SELECT
+    l.bioname,
+    ra.total_amount,
+    ra.organizational_count
+FROM distinct_legislators l
+JOIN legislator_recipient_crosswalk x ON CAST(l.icpsr AS VARCHAR) = x.icpsr
+JOIN recipient_aggregates ra ON x.bonica_rid = ra.bonica_rid
+WHERE ra.cycle = 2024
+ORDER BY ra.total_amount DESC;
 ```
 
 ### Python API
@@ -117,11 +152,12 @@ from duckdb_loader import load_paper_trail_to_postgres
 
 result = load_paper_trail_to_postgres(
     "postgresql://localhost/papertrail",
-    datasets=["legislators", "organizational", "recipient_aggregates"],
+    datasets=["legislators", "crosswalk", "organizational", "recipient_aggregates"],
     filters=[CycleFilter([2024])],
 )
 print(f"Loaded {result.total_rows_loaded:,} total rows")
 print(f"  Legislators: {result.legislators_loaded:,}")
+print(f"  Crosswalk: {result.crosswalk_loaded:,}")
 print(f"  Organizational: {result.organizational_loaded:,}")
 print(f"  Recipient Aggregates: {result.recipient_aggregates_loaded:,}")
 ```

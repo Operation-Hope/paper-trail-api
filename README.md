@@ -27,11 +27,28 @@ The DIME campaign finance dataset is available on Huggingface:
 - Transformed/filtered datasets ready for database population
 - `dime/contributions/organizational/` - 57.8M PAC/committee contributions (1980-2024)
 - `dime/contributions/recipient_aggregates/` - 752K recipient summary records (1980-2024)
-- `distinct_legislators.parquet` - 2,303 legislators (1979-present)
+- `distinct_legislators.parquet` - 2,303 legislators with ICPSR IDs (1979-present)
+- `legislator_crosswalk.parquet` - 426K mappings from legislators to DIME recipient IDs
 
 #### Organizational Contributions Schema
 
 Contributions from PACs, corporations, committees, unions (excludes individual donors). Same 45-column schema as source DIME contributions.
+
+#### Legislator Crosswalk Schema
+
+Maps legislators (via ICPSR from Voteview) to DIME recipient IDs. Enables joining legislators to contribution data.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `icpsr` | string | ICPSR identifier (links to distinct_legislators) |
+| `bonica_rid` | string | DIME recipient ID (links to contributions) |
+| `recipient_name` | string | Recipient name |
+| `party` | string | Party affiliation |
+| `state` | string | State code |
+| `seat` | string | Office sought |
+| `fec_id` | string | FEC committee ID |
+
+**Join chain:** `distinct_legislators.icpsr → crosswalk.icpsr → crosswalk.bonica_rid → contributions.bonica_rid`
 
 #### Recipient Aggregates Schema
 
