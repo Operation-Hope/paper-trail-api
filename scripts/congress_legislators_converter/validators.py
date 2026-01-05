@@ -263,7 +263,12 @@ def _values_equal(a: Any, b: Any) -> bool:
         a_float = float(a) if isinstance(a, str) else a
         b_float = float(b) if isinstance(b, str) else b
         if isinstance(a_float, (int, float)) and isinstance(b_float, (int, float)):
-            return abs(float(a_float) - float(b_float)) < 0.000001
+            # Handle NaN: strings like "Nan" (a person's name) parse as float nan.
+            # Since nan != nan in IEEE 754, skip to string comparison for NaN values.
+            if math.isnan(a_float) or math.isnan(b_float):
+                pass  # Fall through to string comparison
+            else:
+                return abs(float(a_float) - float(b_float)) < 0.000001
     except (ValueError, TypeError):
         pass
 

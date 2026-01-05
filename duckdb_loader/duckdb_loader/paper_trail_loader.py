@@ -33,6 +33,7 @@ from .schema import (
     LEGISLATORS_COLUMNS,
     ORGANIZATIONAL_COLUMNS,
     RECIPIENT_AGGREGATES_COLUMNS,
+    UNIFIED_LEGISLATORS_COLUMNS,
 )
 
 # Base URL for paper-trail-data on Huggingface
@@ -40,6 +41,7 @@ PAPER_TRAIL_BASE_URL = "https://huggingface.co/datasets/Dustinhax/paper-trail-da
 
 # URL patterns for each dataset
 LEGISLATORS_URL = f"{PAPER_TRAIL_BASE_URL}/distinct_legislators.parquet"
+UNIFIED_LEGISLATORS_URL = f"{PAPER_TRAIL_BASE_URL}/legislators.parquet"
 CROSSWALK_URL = f"{PAPER_TRAIL_BASE_URL}/legislator_crosswalk.parquet"
 ORGANIZATIONAL_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/organizational/contribDB_{{cycle}}_organizational.parquet"
 RECIPIENT_AGGREGATES_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/recipient_aggregates/recipient_aggregates_{{cycle}}.parquet"
@@ -47,7 +49,14 @@ RECIPIENT_AGGREGATES_URL_PATTERN = f"{PAPER_TRAIL_BASE_URL}/dime/contributions/r
 DEFAULT_BATCH_SIZE = 100_000  # Large batches for COPY performance
 
 # Dataset type literals
-DatasetType = Literal["legislators", "crosswalk", "organizational", "recipient_aggregates", "all"]
+DatasetType = Literal[
+    "legislators",  # distinct_legislators (Voteview-based, legacy)
+    "legislators_unified",  # congress-legislators (enhanced schema with FEC IDs)
+    "crosswalk",
+    "organizational",
+    "recipient_aggregates",
+    "all",
+]
 
 
 @dataclass
@@ -55,6 +64,7 @@ class PaperTrailLoadResult:
     """Result of a paper-trail-data load operation."""
 
     legislators_loaded: int
+    legislators_unified_loaded: int
     crosswalk_loaded: int
     organizational_loaded: int
     recipient_aggregates_loaded: int
@@ -68,6 +78,7 @@ class PaperTrailLoadResult:
         """Total rows loaded across all tables."""
         return (
             self.legislators_loaded
+            + self.legislators_unified_loaded
             + self.crosswalk_loaded
             + self.organizational_loaded
             + self.recipient_aggregates_loaded
@@ -107,6 +118,16 @@ def _get_postgres_column_type_legislators(col: str) -> str:
         "nominate_dim1": "DOUBLE PRECISION",
         "nominate_dim2": "DOUBLE PRECISION",
         "congresses_served": "INTEGER[]",
+    }
+    return type_map.get(col, "TEXT")
+
+
+def _get_postgres_column_type_unified_legislators(col: str) -> str:
+    """Map unified legislators column names to PostgreSQL types."""
+    type_map = {
+        "icpsr": "BIGINT",  # INT64 in parquet
+        "fec_ids": "TEXT[]",  # LIST<VARCHAR> in parquet
+        "is_current": "BOOLEAN",
     }
     return type_map.get(col, "TEXT")
 
@@ -182,6 +203,21 @@ def _create_legislators_schema(
     conn.commit()
 
 
+def _create_unified_legislators_schema(
+    conn: psycopg.Connection, table_name: str = "legislators"
+) -> None:
+    """Create the unified legislators table in PostgreSQL."""
+    col_defs = [
+        _build_column_def(col, _get_postgres_column_type_unified_legislators)
+        for col in UNIFIED_LEGISLATORS_COLUMNS
+    ]
+    create_sql = sql.SQL(
+        "CREATE TABLE IF NOT EXISTS {} (id SERIAL PRIMARY KEY, {}, UNIQUE(bioguide_id))"
+    ).format(sql.Identifier(table_name), sql.SQL(", ").join(col_defs))
+    conn.execute(create_sql)
+    conn.commit()
+
+
 def _create_organizational_schema(
     conn: psycopg.Connection, table_name: str = "organizational_contributions"
 ) -> None:
@@ -222,6 +258,32 @@ def _create_legislators_indexes(
         ("idx_leg_icpsr", "icpsr"),
         ("idx_leg_state_abbrev", "state_abbrev"),
         ("idx_leg_party_code", "party_code"),
+    ]
+    for idx_name, col in indexes:
+        try:
+            create_idx_sql = sql.SQL("CREATE INDEX IF NOT EXISTS {} ON {} ({})").format(
+                sql.Identifier(idx_name),
+                sql.Identifier(table_name),
+                sql.Identifier(col),
+            )
+            conn.execute(create_idx_sql)
+        except (pg_errors.UndefinedColumn, pg_errors.UndefinedTable):
+            # Column or table may not exist if user selected subset
+            pass
+    conn.commit()
+
+
+def _create_unified_legislators_indexes(
+    conn: psycopg.Connection, table_name: str = "legislators"
+) -> None:
+    """Create indexes on unified legislators table."""
+    indexes = [
+        ("idx_uleg_bioguide_id", "bioguide_id"),
+        ("idx_uleg_icpsr", "icpsr"),
+        ("idx_uleg_state", "state"),
+        ("idx_uleg_party", "party"),
+        ("idx_uleg_is_current", "is_current"),
+        ("idx_uleg_opensecrets_id", "opensecrets_id"),
     ]
     for idx_name, col in indexes:
         try:
@@ -430,6 +492,66 @@ def _load_legislators(
     return rows_loaded
 
 
+def _load_unified_legislators(
+    pg_conn: psycopg.Connection,
+    duck_conn: duckdb.DuckDBPyConnection,
+    table_name: str = "legislators",
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    show_progress: bool = True,
+) -> int:
+    """Load unified legislators table from congress-legislators data.
+
+    Loads the enhanced legislators.parquet with FEC IDs and OpenSecrets linkage.
+    """
+    _create_unified_legislators_schema(pg_conn, table_name)
+
+    pg_cols = [_sanitize_column_name(col) for col in UNIFIED_LEGISLATORS_COLUMNS]
+    insert_sql = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+        sql.Identifier(table_name),
+        sql.SQL(", ").join(sql.Identifier(c) for c in pg_cols),
+        sql.SQL(", ").join(sql.Placeholder() for _ in pg_cols),
+    )
+
+    col_select = ", ".join(f'"{col}"' for col in UNIFIED_LEGISLATORS_COLUMNS)
+    query_sql = f'SELECT {col_select} FROM read_parquet("{UNIFIED_LEGISLATORS_URL}")'
+
+    if show_progress:
+        print(f"Loading unified legislators from {UNIFIED_LEGISLATORS_URL}")
+
+    rows_loaded = 0
+    result = duck_conn.execute(query_sql)
+    batch = []
+
+    # Find the index of fec_ids dynamically (it's a list type)
+    fec_ids_idx = UNIFIED_LEGISLATORS_COLUMNS.index("fec_ids")
+
+    while True:
+        row = result.fetchone()
+        if row is None:
+            break
+
+        # Convert list type for fec_ids
+        row_list = list(row)
+        if row_list[fec_ids_idx] is not None:
+            row_list[fec_ids_idx] = list(row_list[fec_ids_idx])
+        batch.append(tuple(row_list))
+
+        if len(batch) >= batch_size:
+            with pg_conn.cursor() as cur:
+                cur.executemany(insert_sql, batch)
+            pg_conn.commit()
+            rows_loaded += len(batch)
+            batch = []
+
+    if batch:
+        with pg_conn.cursor() as cur:
+            cur.executemany(insert_sql, batch)
+        pg_conn.commit()
+        rows_loaded += len(batch)
+
+    return rows_loaded
+
+
 def _load_organizational_contributions(
     pg_conn: psycopg.Connection,
     duck_conn: duckdb.DuckDBPyConnection,
@@ -598,28 +720,31 @@ def load_paper_trail_to_postgres(
     show_progress: bool = True,
     create_indexes_after: bool = True,
     legislators_table: str = "distinct_legislators",
+    legislators_unified_table: str = "legislators",
     crosswalk_table: str = "legislator_recipient_crosswalk",
     organizational_table: str = "organizational_contributions",
     recipient_aggregates_table: str = "recipient_aggregates",
 ) -> PaperTrailLoadResult:
     """Load paper-trail-data from Huggingface into PostgreSQL.
 
-    Loads four processed datasets:
-    - distinct_legislators: ~2,303 unique legislators from Voteview
+    Loads processed datasets:
+    - distinct_legislators: ~2,303 unique legislators from Voteview (legacy)
+    - legislators: ~2,400 legislators from congress-legislators (enhanced, with FEC IDs)
     - legislator_recipient_crosswalk: Maps legislators (icpsr) to DIME recipients (bonica_rid)
     - organizational_contributions: DIME contributions from organizational donors
     - recipient_aggregates: Pre-computed contribution totals by recipient
 
     Args:
         database_url: PostgreSQL connection URL
-        datasets: Which datasets to load ("legislators", "crosswalk", "organizational",
-                  "recipient_aggregates", "all", or list of these)
+        datasets: Which datasets to load ("legislators", "legislators_unified", "crosswalk",
+                  "organizational", "recipient_aggregates", "all", or list of these)
         filters: List of filters to apply (CycleFilter for cycle selection)
         limit: Maximum rows per dataset (legislators/crosswalk always load full)
         batch_size: Rows per batch insert (default: 10,000)
         show_progress: Show progress bars
         create_indexes_after: Create indexes after loading
-        legislators_table: Table name for legislators (default: distinct_legislators)
+        legislators_table: Table name for legacy legislators (default: distinct_legislators)
+        legislators_unified_table: Table name for unified legislators (default: legislators)
         crosswalk_table: Table name for crosswalk (default: legislator_recipient_crosswalk)
         organizational_table: Table name for organizational (default: organizational_contributions)
         recipient_aggregates_table: Table name for aggregates (default: recipient_aggregates)
@@ -631,7 +756,7 @@ def load_paper_trail_to_postgres(
         >>> from duckdb_loader import load_paper_trail_to_postgres, CycleFilter
         >>> result = load_paper_trail_to_postgres(
         ...     "postgresql://localhost/papertrail",
-        ...     datasets=["legislators", "crosswalk", "recipient_aggregates"],
+        ...     datasets=["legislators_unified", "crosswalk", "recipient_aggregates"],
         ...     filters=[CycleFilter([2022, 2024])],
         ... )
         >>> print(f"Loaded {result.total_rows_loaded:,} total rows")
@@ -639,10 +764,18 @@ def load_paper_trail_to_postgres(
     filters = filters or []
 
     # Normalize datasets to list
-    valid_datasets = {"legislators", "crosswalk", "organizational", "recipient_aggregates", "all"}
+    valid_datasets = {
+        "legislators",
+        "legislators_unified",
+        "crosswalk",
+        "organizational",
+        "recipient_aggregates",
+        "all",
+    }
     dataset_list: list[str]
     if isinstance(datasets, str):
         if datasets == "all":
+            # Note: "all" includes legacy legislators but not unified (explicit opt-in)
             dataset_list = ["legislators", "crosswalk", "organizational", "recipient_aggregates"]
         else:
             dataset_list = [datasets]
@@ -671,13 +804,14 @@ def load_paper_trail_to_postgres(
     duck_conn.execute("SET enable_progress_bar = false")
 
     legislators_loaded = 0
+    legislators_unified_loaded = 0
     crosswalk_loaded = 0
     organizational_loaded = 0
     recipient_aggregates_loaded = 0
     tables_created: list[str] = []
 
     try:
-        # Load legislators (always full, no cycle filtering)
+        # Load legacy legislators (always full, no cycle filtering)
         if "legislators" in dataset_list:
             legislators_loaded = _load_legislators(
                 pg_conn,
@@ -691,6 +825,21 @@ def load_paper_trail_to_postgres(
                 if show_progress:
                     print("Creating legislators indexes...")
                 _create_legislators_indexes(pg_conn, legislators_table)
+
+        # Load unified legislators (always full, no cycle filtering)
+        if "legislators_unified" in dataset_list:
+            legislators_unified_loaded = _load_unified_legislators(
+                pg_conn,
+                duck_conn,
+                table_name=legislators_unified_table,
+                batch_size=batch_size,
+                show_progress=show_progress,
+            )
+            tables_created.append(legislators_unified_table)
+            if create_indexes_after and legislators_unified_loaded > 0:
+                if show_progress:
+                    print("Creating unified legislators indexes...")
+                _create_unified_legislators_indexes(pg_conn, legislators_unified_table)
 
         # Load crosswalk (always full, no cycle filtering)
         if "crosswalk" in dataset_list:
@@ -747,6 +896,7 @@ def load_paper_trail_to_postgres(
 
     return PaperTrailLoadResult(
         legislators_loaded=legislators_loaded,
+        legislators_unified_loaded=legislators_unified_loaded,
         crosswalk_loaded=crosswalk_loaded,
         organizational_loaded=organizational_loaded,
         recipient_aggregates_loaded=recipient_aggregates_loaded,

@@ -339,3 +339,43 @@ class TestValidateUnifiedSample:
 
         assert "Sample mismatch: first_name" in str(exc_info.value)
         conn.close()
+
+
+class TestValuesEqual:
+    """Tests for _values_equal helper function."""
+
+    def test_equal_strings(self):
+        """Returns True for equal strings."""
+        from scripts.congress_legislators_converter.validators import _values_equal
+
+        assert _values_equal("hello", "hello") is True
+
+    def test_unequal_strings(self):
+        """Returns False for unequal strings."""
+        from scripts.congress_legislators_converter.validators import _values_equal
+
+        assert _values_equal("hello", "world") is False
+
+    def test_nan_string_as_name(self):
+        """Handles 'Nan' as a person's name (not float NaN)."""
+        from scripts.congress_legislators_converter.validators import _values_equal
+
+        # "Nan" is Nan Hayworth's actual first name - should compare as strings
+        assert _values_equal("Nan", "Nan") is True
+        assert _values_equal("Nan", "John") is False
+
+    def test_numeric_strings(self):
+        """Compares numeric strings with tolerance."""
+        from scripts.congress_legislators_converter.validators import _values_equal
+
+        assert _values_equal("123", "123") is True
+        assert _values_equal("123.0", "123") is True
+        assert _values_equal("123", "456") is False
+
+    def test_none_values(self):
+        """Handles None values correctly."""
+        from scripts.congress_legislators_converter.validators import _values_equal
+
+        assert _values_equal(None, None) is True
+        assert _values_equal(None, "value") is False
+        assert _values_equal("value", None) is False

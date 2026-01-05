@@ -104,6 +104,26 @@ LEGISLATORS_COLUMNS: Final[list[str]] = [
     "nominate_dim2",
 ]
 
+# Schema for unified legislators table from congress-legislators converter
+# Combines current and historical legislators with enhanced schema
+# Source: https://huggingface.co/datasets/Dustinhax/paper-trail-data/resolve/main/legislators.parquet
+# Contains legislators from Congress 96+ (1979 onwards) with FEC ID and OpenSecrets linkage
+UNIFIED_LEGISLATORS_COLUMNS: Final[list[str]] = [
+    "bioguide_id",  # Primary key
+    "last_name",
+    "first_name",
+    "full_name",
+    "birthday",  # Date string (YYYY-MM-DD)
+    "gender",
+    "type",  # 'sen' or 'rep'
+    "state",  # State abbreviation
+    "party",  # Party affiliation
+    "icpsr",  # Cross-reference ID for DIME linkage (INT64)
+    "fec_ids",  # LIST<VARCHAR> - FEC committee IDs
+    "opensecrets_id",  # OpenSecrets CID
+    "is_current",  # BOOLEAN - currently serving
+]
+
 # Schema for legislator_recipient_crosswalk table from paper-trail-data
 # Maps legislators (via ICPSR) to DIME recipients (bonica_rid)
 # Source: https://huggingface.co/datasets/Dustinhax/paper-trail-data/resolve/main/legislator_crosswalk.parquet

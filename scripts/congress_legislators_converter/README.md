@@ -176,3 +176,14 @@ The `icpsr` column (unified) or `icpsr_id` column (source) can be used to join w
 
 The `fec_ids` array can be used to join with DIME contribution data:
 - DIME Recipients: `ICPSR` column (contains FEC IDs with year suffix)
+
+## Loading to PostgreSQL
+
+The generated `legislators.parquet` is published to HuggingFace and can be loaded directly using the duckdb-loader:
+
+```bash
+# Load unified legislators to PostgreSQL
+duckdb-loader load-paper-trail $DATABASE_URL -d legislators_unified
+```
+
+See [duckdb_loader/README.md](../../duckdb_loader/README.md) for full documentation.
