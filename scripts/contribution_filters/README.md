@@ -4,12 +4,24 @@ This document describes the extraction of filtered contribution datasets from DI
 
 ## Overview
 
-The contribution filters module extracts two specialized datasets from the DIME contributions data:
+The contribution filters module extracts three specialized datasets from the DIME contributions data:
 
 1. **Organizational Contributions**: Filters out individual contributors, keeping only committees, corporations, PACs, and other organizational entities
 2. **Recipient Aggregates**: Groups contributions by recipient ID with summary statistics
+3. **Raw Organizational Contributions**: Detailed organizational contribution records with legislator linking via `bioguide_id`
 
-Both outputs span 23 election cycles (1980-2024) and are validated for correctness before publishing.
+All outputs span 23 election cycles (1980-2024) and are validated for correctness before publishing.
+
+### Legislator Linking (Optional)
+
+All output types can optionally include a `bioguide_id` column that links recipients to Congress legislators. This enables:
+- Filtering contributions to specific legislators
+- Joining with congressional voting records
+- Building legislator-centric campaign finance analyses
+
+The join path: **contributions → recipients (on `bonica.rid`) → legislators (via FEC ID from ICPSR)**
+
+**Expected Coverage**: ~10% of records match (only recipients with FEC-style ICPSR codes).
 
 ## Source Data
 
@@ -99,10 +111,11 @@ GROUP BY "bonica.rid", "recipient.name", "recipient.party",
 ORDER BY total_amount DESC
 ```
 
-**Output Schema** (13 columns):
+**Output Schema** (14 columns with `--legislators-path`):
 
 | Column | Type | Description |
 |--------|------|-------------|
+| `bioguide_id` | string | Congress legislator ID (nullable, ~10% coverage) |
 | `bonica.rid` | string | Recipient ID (not nullable) |
 | `recipient.name` | string | Recipient name |
 | `recipient.party` | string | Party affiliation |
@@ -116,6 +129,36 @@ ORDER BY total_amount DESC
 | `individual_count` | int64 | Count from individual contributors |
 | `organizational_total` | float64 | Sum from PACs, corps, committees |
 | `organizational_count` | int64 | Count from PACs, corps, committees |
+
+### Raw Organizational Contributions
+
+Detailed organizational contribution records with legislator linking. This output type **requires** `--legislators-path`.
+
+**Filter Logic**:
+```sql
+WHERE "contributor.type" != 'I'
+  AND "contributor.type" IS NOT NULL
+```
+
+**Output Schema** (10 columns):
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `bioguide_id` | string | Congress legislator ID (nullable, ~10% coverage) |
+| `cycle` | int64 | Election cycle year |
+| `bonica.rid` | string | Recipient ID |
+| `recipient.name` | string | Recipient name |
+| `contributor_name` | string | Organization name |
+| `contributor_type` | string | Contributor type code (C, L, O, U, P, etc.) |
+| `contributor_id` | string | DIME contributor ID |
+| `amount` | float64 | Contribution amount |
+| `date` | string | Contribution date |
+| `contributor_state` | string | Contributor state |
+
+**Use Cases**:
+- Detailed analysis of PAC/corporate giving patterns
+- Linking specific contributions to legislators
+- Building contributor-to-legislator networks
 
 ## Validation Suite
 
@@ -197,22 +240,29 @@ contributions/
 
 ```bash
 # Single cycle
-python -m contribution_filters output/ --cycle 2020
+contribution-filters output/ --cycle 2020
 
 # All cycles
-python -m contribution_filters output/ --all
+contribution-filters output/ --all
 
 # Cycle range
-python -m contribution_filters output/ --start-cycle 2000 --end-cycle 2020
+contribution-filters output/ --start-cycle 2000 --end-cycle 2020
 
 # Specific output type
-python -m contribution_filters output/ --cycle 2020 --output-type aggregates
+contribution-filters output/ --cycle 2020 --output-type aggregates
+
+# With legislator linking (adds bioguide_id column)
+contribution-filters output/ --cycle 2020 --legislators-path /path/to/legislators.parquet
+
+# Raw organizational contributions (requires --legislators-path)
+contribution-filters output/ --cycle 2020 --output-type raw-organizational \
+    --legislators-path /path/to/legislators.parquet
 
 # Resume interrupted run
-python -m contribution_filters output/ --all --skip-existing
+contribution-filters output/ --all --skip-existing
 
 # Rate limit mitigation
-python -m contribution_filters output/ --all --delay 30
+contribution-filters output/ --all --delay 30
 ```
 
 ### CLI Options
@@ -224,11 +274,14 @@ python -m contribution_filters output/ --all --delay 30
 | `--all` | Process all cycles (1980-2024) |
 | `--start-cycle` | Start of cycle range |
 | `--end-cycle` | End of cycle range |
-| `--output-type` | `organizational`, `aggregates`, or `all` (default) |
+| `--output-type` | `organizational`, `aggregates`, `raw-organizational`, or `all` (default) |
+| `--legislators-path` | Path to legislators.parquet for bioguide_id lookup |
 | `--no-validate` | Skip validation (not recommended) |
 | `--sample-size` | Sample size for aggregation validation (default: 100) |
 | `--skip-existing` | Skip files that already exist |
 | `--delay` | Delay in seconds between cycles (helps with rate limiting) |
+
+**Note**: `raw-organizational` output type requires `--legislators-path` to be specified.
 
 ### Programmatic
 
@@ -236,6 +289,7 @@ python -m contribution_filters output/ --all --delay 30
 from contribution_filters import (
     extract_organizational_contributions,
     extract_recipient_aggregates,
+    extract_raw_organizational_contributions,
 )
 
 # Organizational contributions
@@ -247,6 +301,15 @@ result = extract_organizational_contributions(
 print(f"Extracted {result.output_count:,} organizational contributions")
 print(f"Validation: {'PASS' if result.validation.all_valid else 'FAIL'}")
 
+# Organizational contributions with legislator linking
+result = extract_organizational_contributions(
+    "output/organizational/contribDB_2020_organizational.parquet",
+    cycle=2020,
+    legislators_path="/path/to/legislators.parquet",
+    validate=True,
+)
+print(f"Bioguide ID coverage: {result.validation.bioguide_coverage_pct:.1f}%")
+
 # Recipient aggregates
 result = extract_recipient_aggregates(
     "output/recipient_aggregates/recipient_aggregates_2020.parquet",
@@ -256,6 +319,15 @@ result = extract_recipient_aggregates(
 )
 print(f"Extracted {result.output_count:,} recipient aggregate records")
 print(f"Validation: {'PASS' if result.validation.all_valid else 'FAIL'}")
+
+# Raw organizational contributions (requires legislators_path)
+result = extract_raw_organizational_contributions(
+    "output/raw_organizational/organizational_contributions_2020.parquet",
+    cycle=2020,
+    legislators_path="/path/to/legislators.parquet",
+    validate=True,
+)
+print(f"Extracted {result.output_count:,} raw organizational contributions")
 ```
 
 ### Custom Source URL
@@ -311,7 +383,34 @@ For security, source URLs are validated against an allowlist:
 ALLOWED_SOURCE_DOMAINS = ["huggingface.co"]
 ```
 
-Local file paths starting with `/` or `./` are also permitted if the file exists.
+Local file paths are permitted from `/tmp/` by default. Additional directories can be allowed via the `DIME_ALLOWED_DIRS` environment variable (colon-separated):
+
+```bash
+export DIME_ALLOWED_DIRS="/path/to/data:/another/path"
+```
+
+### FEC ID Format and Legislator Linking
+
+The `bioguide_id` column links DIME recipients to Congress legislators via FEC candidate IDs. The join works as follows:
+
+1. **DIME ICPSR Format**: Recipients store ICPSR codes like `H0DC000012020` or `S4VT000332020`
+   - Prefix: `H` (House) or `S` (Senate)
+   - FEC ID: The core identifier (e.g., `0DC00001`, `4VT00033`)
+   - Suffix: 4-digit year
+
+2. **Legislators FEC IDs**: The `legislators.parquet` file contains `fec_ids` arrays
+   - Format: `H0DC00001` or `S4VT00033` (without year suffix)
+
+3. **Join Logic**: Strips the year suffix from ICPSR and matches against FEC IDs
+   ```sql
+   SUBSTRING(ICPSR, 1, LENGTH(ICPSR) - 4) = fec_id
+   AND (ICPSR LIKE 'H%' OR ICPSR LIKE 'S%')
+   ```
+
+**Why ~10% Coverage?**
+- DIME uses multiple ICPSR format conventions
+- Only records with FEC-style prefixes (H/S) can be matched
+- Historical records before FEC ID adoption won't match
 
 ### Error Handling
 
@@ -324,6 +423,7 @@ Custom exceptions provide detailed error context:
 - `FilterValidationError`: Individual contributors found in output
 - `AggregationIntegrityError`: SUM/COUNT mismatch detected
 - `CompletenessError`: Missing or invalid output data
+- `BioguideJoinError`: Invalid bioguide_ids found in output (not in legislators file)
 
 ### Rate Limiting
 

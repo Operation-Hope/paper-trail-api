@@ -6,6 +6,7 @@ from pathlib import Path
 
 from contribution_filters.exceptions import (
     AggregationIntegrityError,
+    BioguideJoinError,
     CompletenessError,
     ContributionFilterError,
     FilterValidationError,
@@ -134,3 +135,40 @@ class TestCompletenessError:
         result = str(error)
         assert "1,000" in result
         assert "950" in result
+
+
+class TestBioguideJoinError:
+    """Tests for BioguideJoinError."""
+
+    def test_str_representation(self) -> None:
+        """Should include invalid bioguide_ids and total count."""
+        error = BioguideJoinError(
+            message="Invalid bioguide_ids found",
+            invalid_bioguide_ids=["A000001", "B000002", "C000003"],
+            total_invalid=3,
+        )
+        result = str(error)
+        assert "Invalid bioguide_ids found" in result
+        assert "A000001" in result
+        assert "3" in result
+
+    def test_str_representation_truncates_list(self) -> None:
+        """Should truncate list when more than 5 invalid IDs."""
+        error = BioguideJoinError(
+            message="Many invalid bioguide_ids",
+            invalid_bioguide_ids=[
+                "A000001",
+                "B000002",
+                "C000003",
+                "D000004",
+                "E000005",
+                "F000006",
+            ],
+            total_invalid=10,
+        )
+        result = str(error)
+        assert "A000001" in result
+        assert "E000005" in result
+        # F000006 should not appear (truncated)
+        assert "F000006" not in result
+        assert "... and 5 more" in result

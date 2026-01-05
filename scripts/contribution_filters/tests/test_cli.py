@@ -79,3 +79,27 @@ class TestCLIArguments:
         assert result == 1
         captured = capsys.readouterr()
         assert "end-cycle" in captured.err
+
+    def test_raw_organizational_requires_legislators_path(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--output-type raw-organizational without --legislators-path should exit with error."""
+        result = main(["output/", "--cycle", "2020", "--output-type", "raw-organizational"])
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "legislators-path" in captured.err
+
+    def test_legislators_path_not_found(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """--legislators-path with non-existent file should exit with error."""
+        result = main(
+            [
+                "output/",
+                "--cycle",
+                "2020",
+                "--legislators-path",
+                "/nonexistent/legislators.parquet",
+            ]
+        )
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err

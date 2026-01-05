@@ -108,3 +108,20 @@ class CompletenessError(ContributionFilterError):
             f"Completeness failed: {self.message}\n"
             f"Expected {self.expected_count:,}, got {self.actual_count:,}"
         )
+
+
+@dataclass
+class BioguideJoinError(ContributionFilterError):
+    """Raised when bioguide_id join validation fails."""
+
+    invalid_bioguide_ids: list[str]
+    total_invalid: int
+
+    def __str__(self) -> str:
+        examples = ", ".join(self.invalid_bioguide_ids[:5])
+        suffix = f"... and {self.total_invalid - 5} more" if self.total_invalid > 5 else ""
+        return (
+            f"Bioguide join validation failed: {self.message}\n"
+            f"Invalid bioguide_ids found: {examples}{suffix}\n"
+            f"Total invalid: {self.total_invalid:,}"
+        )
