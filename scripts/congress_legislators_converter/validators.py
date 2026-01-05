@@ -16,10 +16,18 @@ from .exceptions import (
     ChecksumMismatchError,
     RowCountMismatchError,
     SampleMismatchError,
+    UnifiedValidationError,
 )
 
 if TYPE_CHECKING:
+    import duckdb
+
     from .converter import StreamingStats
+
+
+def _escape_sql_path(path: Path) -> str:
+    """Escape a path for use in SQL string literals (double single quotes)."""
+    return str(path).replace("'", "''")
 
 
 @dataclass
@@ -255,9 +263,226 @@ def _values_equal(a: Any, b: Any) -> bool:
         a_float = float(a) if isinstance(a, str) else a
         b_float = float(b) if isinstance(b, str) else b
         if isinstance(a_float, (int, float)) and isinstance(b_float, (int, float)):
-            return abs(float(a_float) - float(b_float)) < 0.000001
+            # Handle NaN: strings like "Nan" (a person's name) parse as float nan.
+            # Since nan != nan in IEEE 754, skip to string comparison for NaN values.
+            if math.isnan(a_float) or math.isnan(b_float):
+                pass  # Fall through to string comparison
+            else:
+                return abs(float(a_float) - float(b_float)) < 0.000001
     except (ValueError, TypeError):
         pass
 
     # String comparison
     return str(a) == str(b)
+
+
+# =============================================================================
+# UNIFIED LEGISLATORS VALIDATION (3-Tier)
+# =============================================================================
+
+
+def validate_unified_completeness(
+    output_path: Path,
+    conn: duckdb.DuckDBPyConnection,
+    *,
+    min_expected: int = 10_000,
+    max_expected: int = 15_000,
+) -> None:
+    """
+    Tier 1: Verify completeness of unified legislators output.
+
+    Checks:
+    - All bioguide_ids are unique (no duplicates)
+    - No null bioguide_ids
+    - Expected count range (configurable, default ~12,000-13,000 legislators)
+
+    Args:
+        output_path: Path to the unified legislators parquet file.
+        conn: DuckDB connection.
+        min_expected: Minimum expected legislator count (default 10,000).
+        max_expected: Maximum expected legislator count (default 15,000).
+    """
+    output_sql = _escape_sql_path(output_path)
+
+    # Check for null bioguide_ids
+    null_count = conn.execute(f"""
+        SELECT COUNT(*)
+        FROM read_parquet('{output_sql}')
+        WHERE bioguide_id IS NULL OR bioguide_id = ''
+    """).fetchone()[0]
+
+    if null_count > 0:
+        raise UnifiedValidationError(
+            source_path=output_path,
+            message="Null bioguide_ids found",
+            validation_tier="Tier 1 (Completeness)",
+            details=f"{null_count:,} null or empty bioguide_ids",
+        )
+
+    # Check for duplicate bioguide_ids
+    total_count = conn.execute(f"""
+        SELECT COUNT(*) FROM read_parquet('{output_sql}')
+    """).fetchone()[0]
+
+    unique_count = conn.execute(f"""
+        SELECT COUNT(DISTINCT bioguide_id) FROM read_parquet('{output_sql}')
+    """).fetchone()[0]
+
+    if total_count != unique_count:
+        duplicates = total_count - unique_count
+        details = (
+            f"{duplicates:,} duplicate bioguide_ids "
+            f"(total: {total_count:,}, unique: {unique_count:,})"
+        )
+        raise UnifiedValidationError(
+            source_path=output_path,
+            message="Duplicate bioguide_ids found",
+            validation_tier="Tier 1 (Completeness)",
+            details=details,
+        )
+
+    # Sanity check on expected count range
+    if not (min_expected <= total_count <= max_expected):
+        raise UnifiedValidationError(
+            source_path=output_path,
+            message="Unexpected legislator count",
+            validation_tier="Tier 1 (Completeness)",
+            details=f"Expected {min_expected:,}-{max_expected:,}, got {total_count:,}",
+        )
+
+
+def validate_unified_coverage(
+    output_path: Path,
+    conn: duckdb.DuckDBPyConnection,
+) -> None:
+    """
+    Tier 2: Verify coverage of key identifier fields.
+
+    Checks (informational, not strict thresholds):
+    - fec_ids populated for some legislators
+    - icpsr populated for most legislators
+    """
+    output_sql = _escape_sql_path(output_path)
+
+    total_count = conn.execute(f"""
+        SELECT COUNT(*) FROM read_parquet('{output_sql}')
+    """).fetchone()[0]
+
+    if total_count == 0:
+        raise UnifiedValidationError(
+            source_path=output_path,
+            message="Empty output file",
+            validation_tier="Tier 2 (Coverage)",
+            details="No legislators in output",
+        )
+
+    # FEC IDs coverage (expect ~10% based on data analysis)
+    fec_populated = conn.execute(f"""
+        SELECT COUNT(*)
+        FROM read_parquet('{output_sql}')
+        WHERE fec_ids IS NOT NULL AND LEN(fec_ids) > 0
+    """).fetchone()[0]
+
+    # ICPSR coverage (expect ~96% based on data analysis)
+    icpsr_populated = conn.execute(f"""
+        SELECT COUNT(*)
+        FROM read_parquet('{output_sql}')
+        WHERE icpsr IS NOT NULL
+    """).fetchone()[0]
+
+    # These are informational - we don't fail on specific thresholds
+    # But we do fail if there's zero coverage (indicates extraction bug)
+    if fec_populated == 0:
+        raise UnifiedValidationError(
+            source_path=output_path,
+            message="No FEC IDs populated",
+            validation_tier="Tier 2 (Coverage)",
+            details="Expected some legislators to have FEC IDs",
+        )
+
+    if icpsr_populated == 0:
+        raise UnifiedValidationError(
+            source_path=output_path,
+            message="No ICPSR values populated",
+            validation_tier="Tier 2 (Coverage)",
+            details="Expected most legislators to have ICPSR values",
+        )
+
+
+def validate_unified_sample(
+    current_path: Path,
+    historical_path: Path,
+    output_path: Path,
+    conn: duckdb.DuckDBPyConnection,
+    sample_size: int = 100,
+) -> None:
+    """
+    Tier 3: Verify random sample of rows match source data.
+
+    Samples from output and verifies key fields match the source files.
+    """
+    output_sql = _escape_sql_path(output_path)
+    current_sql = _escape_sql_path(current_path)
+    historical_sql = _escape_sql_path(historical_path)
+
+    # Get sample of bioguide_ids from output
+    # Note: state/party not validated as they represent "most recent" and may differ
+    # between current/historical sources for the same legislator
+    sample_rows = conn.execute(f"""
+        SELECT bioguide_id, last_name, first_name, is_current
+        FROM read_parquet('{output_sql}')
+        USING SAMPLE {sample_size}
+    """).fetchall()
+
+    if len(sample_rows) == 0:
+        raise UnifiedValidationError(
+            source_path=output_path,
+            message="No sample rows available",
+            validation_tier="Tier 3 (Sample)",
+            details="Output file appears to be empty",
+        )
+
+    # Verify each sample row exists in appropriate source
+    for row in sample_rows:
+        bioguide_id, last_name, first_name, is_current = row
+
+        # Determine source file based on is_current flag
+        source_path = current_path if is_current else historical_path
+        source_sql = current_sql if is_current else historical_sql
+
+        # Verify bioguide_id exists in source with matching fields
+        source_match = conn.execute(
+            f"""
+            SELECT last_name, first_name
+            FROM read_parquet('{source_sql}')
+            WHERE bioguide_id = ?
+        """,
+            [bioguide_id],
+        ).fetchone()
+
+        if source_match is None:
+            raise UnifiedValidationError(
+                source_path=output_path,
+                message="Sample row not found in source",
+                validation_tier="Tier 3 (Sample)",
+                details=f"bioguide_id={bioguide_id} not found in {source_path.name}",
+            )
+
+        src_last, src_first = source_match
+
+        # Compare key fields (allowing for null handling)
+        if not _values_equal(last_name, src_last):
+            raise UnifiedValidationError(
+                source_path=output_path,
+                message="Sample mismatch: last_name",
+                validation_tier="Tier 3 (Sample)",
+                details=f"bioguide_id={bioguide_id}: expected {src_last!r}, got {last_name!r}",
+            )
+
+        if not _values_equal(first_name, src_first):
+            raise UnifiedValidationError(
+                source_path=output_path,
+                message="Sample mismatch: first_name",
+                validation_tier="Tier 3 (Sample)",
+                details=f"bioguide_id={bioguide_id}: expected {src_first!r}, got {first_name!r}",
+            )

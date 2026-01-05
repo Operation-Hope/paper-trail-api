@@ -24,6 +24,36 @@ uv pip install pyarrow
 uv run -m congress_legislators_converter all --output-dir ./data
 ```
 
+### Create Unified Legislators File
+
+After running `all`, create a merged file with enhanced schema:
+
+```bash
+uv run -m congress_legislators_converter unified --output-dir ./data
+```
+
+This creates `legislators.parquet` with:
+- Legislators from Congress 96 onward (1979+) by default
+- Deduplicated by `bioguide_id` (current takes precedence)
+- `fec_ids` parsed from comma-separated string to array
+- `icpsr` cast from string to int64
+- `is_current` flag to identify current legislators
+
+#### Congress Filtering Options
+
+By default, the `unified` command filters to Congress 96+ (1979 onward) to match DIME contribution data coverage:
+
+```bash
+# Default: Congress 96+ (~2,400 legislators)
+uv run -m congress_legislators_converter unified --output-dir ./data
+
+# Custom minimum congress
+uv run -m congress_legislators_converter unified --output-dir ./data --min-congress 100
+
+# Include all legislators (no filtering, ~12,700 legislators)
+uv run -m congress_legislators_converter unified --output-dir ./data --all-congresses
+```
+
 ### Download Only
 
 ```bash
@@ -42,9 +72,14 @@ uv run -m congress_legislators_converter convert legislators-current.csv legisla
 
 ### Options
 
+**General:**
 - `--no-validate`: Skip validation (not recommended)
 - `--sample-size N`: Number of rows to sample for validation
 - `--batch-size N`: Rows per batch for streaming (default: 100,000)
+
+**Unified command:**
+- `--min-congress N`: Minimum congress to include (default: 96, i.e. 1979+)
+- `--all-congresses`: Include all legislators (no congress filtering)
 
 ## Schema
 
@@ -103,8 +138,52 @@ Three-tier validation ensures lossless conversion:
 - **All columns**: String type (pa.string())
 - **Null handling**: Empty strings converted to null
 
+## Unified Legislators Schema
+
+The `unified` command creates `legislators.parquet` with an enhanced schema optimized for downstream joins:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `bioguide_id` | STRING | Primary key (non-nullable) |
+| `last_name` | STRING | Legislator's last name |
+| `first_name` | STRING | First name |
+| `full_name` | STRING | Complete display name |
+| `birthday` | STRING | Birth date (YYYY-MM-DD) |
+| `gender` | STRING | M/F |
+| `type` | STRING | sen/rep (most recent) |
+| `state` | STRING | 2-letter code (most recent) |
+| `party` | STRING | Political party (most recent) |
+| `icpsr` | INT64 | ICPSR ID for Voteview joins (nullable) |
+| `fec_ids` | LIST\<STRING\> | Array of FEC candidate IDs |
+| `opensecrets_id` | STRING | OpenSecrets CRP ID |
+| `is_current` | BOOLEAN | True for currently serving legislators |
+
+### Coverage Statistics
+
+Typical coverage for unified output with default Congress 96+ filter (~2,400 legislators):
+- **FEC IDs**: ~50-60% (legislators with campaign finance records)
+- **ICPSR**: ~95%+ (nearly all modern legislators)
+
+Without filtering (~12,700 legislators from 1789):
+- **FEC IDs**: ~12% (FEC data starts 1979)
+- **ICPSR**: ~96%
+
 ## Cross-references
 
-The `icpsr_id` column can be used to join with Voteview data:
+The `icpsr` column (unified) or `icpsr_id` column (source) can be used to join with Voteview data:
 - Voteview Members: `icpsr` column
 - Voteview Votes: `icpsr` column
+
+The `fec_ids` array can be used to join with DIME contribution data:
+- DIME Recipients: `ICPSR` column (contains FEC IDs with year suffix)
+
+## Loading to PostgreSQL
+
+The generated `legislators.parquet` is published to HuggingFace and can be loaded directly using the duckdb-loader:
+
+```bash
+# Load unified legislators to PostgreSQL
+duckdb-loader load-paper-trail $DATABASE_URL -d legislators_unified
+```
+
+See [duckdb_loader/README.md](../../duckdb_loader/README.md) for full documentation.

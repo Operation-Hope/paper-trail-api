@@ -68,7 +68,8 @@ Load pre-processed datasets from [Dustinhax/paper-trail-data](https://huggingfac
 
 | Dataset | Description | Size |
 |---------|-------------|------|
-| `legislators` | Unique legislators from Voteview (includes icpsr) | ~2,300 rows |
+| `legislators` | Unique legislators from Voteview (legacy, includes icpsr) | ~2,300 rows |
+| `legislators_unified` | Congress-legislators with FEC IDs, OpenSecrets (enhanced) | ~2,400 rows |
 | `crosswalk` | Maps legislators (icpsr) to DIME recipient IDs (bonica_rid) | ~426k rows |
 | `organizational` | Organizational donor contributions only | ~15M rows/cycle |
 | `recipient_aggregates` | Pre-computed totals by recipient | ~20k rows/cycle |
