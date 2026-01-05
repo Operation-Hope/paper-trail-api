@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 
 import pyarrow as pa
@@ -20,9 +21,17 @@ ALLOWED_SOURCE_DOMAINS = [
 ]
 
 # Allowed local directories for source files (path traversal mitigation)
+# Security model: Only allow files from known-safe directories to prevent
+# path traversal attacks. Additional directories can be added via DIME_ALLOWED_DIRS
+# environment variable (colon-separated).
+_env_dirs = (
+    os.environ.get("DIME_ALLOWED_DIRS", "").split(":")
+    if os.environ.get("DIME_ALLOWED_DIRS")
+    else []
+)
 ALLOWED_LOCAL_DIRECTORIES = [
-    "/Users/d/projects/tyt/paper-trail-api/",
     "/tmp/",
+    *[d for d in _env_dirs if d],  # Filter empty strings
 ]
 
 
