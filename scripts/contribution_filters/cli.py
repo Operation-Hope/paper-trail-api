@@ -9,12 +9,17 @@ from datetime import datetime
 from pathlib import Path
 
 from .exceptions import ContributionFilterError
-from .extractor import extract_organizational_contributions, extract_recipient_aggregates
+from .extractor import (
+    extract_organizational_contributions,
+    extract_raw_organizational_contributions,
+    extract_recipient_aggregates,
+)
 from .schema import (
     ALL_CYCLES,
     MAX_CYCLE,
     MIN_CYCLE,
     get_organizational_filename,
+    get_raw_organizational_filename,
     get_recipient_aggregates_filename,
 )
 
@@ -79,10 +84,22 @@ Examples:
 
     parser.add_argument(
         "--output-type",
-        choices=["organizational", "aggregates", "all"],
+        choices=["organizational", "aggregates", "raw-organizational", "all"],
         default="all",
         dest="output_type",
-        help="Type of output to generate (default: all)",
+        help=(
+            "Type of output to generate (default: all). "
+            "'raw-organizational' requires --legislators-path."
+        ),
+    )
+    parser.add_argument(
+        "--legislators-path",
+        type=Path,
+        dest="legislators_path",
+        help=(
+            "Path to legislators.parquet for bioguide_id lookup. "
+            "When provided, adds bioguide_id column to outputs."
+        ),
     )
     parser.add_argument(
         "--no-validate",
@@ -142,9 +159,27 @@ Examples:
             )
             return 1
 
+    # Validate raw-organizational requires legislators-path
+    if args.output_type == "raw-organizational" and not args.legislators_path:
+        print(
+            "ERROR: --output-type raw-organizational requires --legislators-path",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Validate legislators_path exists if provided
+    if args.legislators_path and not args.legislators_path.exists():
+        print(
+            f"ERROR: Legislators file not found: {args.legislators_path}",
+            file=sys.stderr,
+        )
+        return 1
+
     logger.info("[%s] Processing %d cycle(s)", datetime.now().isoformat(), len(cycles))
     logger.info("  Output directory: %s", args.output_dir)
     logger.info("  Output type: %s", args.output_type)
+    if args.legislators_path:
+        logger.info("  Legislators path: %s", args.legislators_path)
     logger.info("  Validation: %s", "disabled" if args.no_validate else "enabled")
     if args.skip_existing:
         logger.info("  Skip existing: enabled")
@@ -175,6 +210,7 @@ Examples:
                     result = extract_organizational_contributions(
                         output_path,
                         cycle,
+                        legislators_path=args.legislators_path,
                         validate=not args.no_validate,
                     )
                     file_size = result.output_path.stat().st_size
@@ -195,8 +231,28 @@ Examples:
                     result = extract_recipient_aggregates(
                         output_path,
                         cycle,
+                        legislators_path=args.legislators_path,
                         validate=not args.no_validate,
                         sample_size=args.sample_size,
+                    )
+                    file_size = result.output_path.stat().st_size
+                    logger.info("  Created: %s", result.output_path)
+                    logger.info("  Size: %s", _format_size(file_size))
+                    cycle_did_work = True
+
+            # Raw organizational contributions (requires legislators_path)
+            if args.output_type in ("raw-organizational", "all") and args.legislators_path:
+                output_path = (
+                    args.output_dir / "raw_organizational" / get_raw_organizational_filename(cycle)
+                )
+                if args.skip_existing and output_path.exists():
+                    logger.info("  Skipping (exists): %s", output_path)
+                else:
+                    result = extract_raw_organizational_contributions(
+                        output_path,
+                        cycle,
+                        args.legislators_path,
+                        validate=not args.no_validate,
                     )
                     file_size = result.output_path.stat().st_size
                     logger.info("  Created: %s", result.output_path)

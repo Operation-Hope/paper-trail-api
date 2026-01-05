@@ -48,3 +48,24 @@ class TestValidationResult:
         # Neither valid
         result = ValidationResult()
         assert result.all_valid is False
+
+    def test_bioguide_join_fields_default_values(self) -> None:
+        """Bioguide join fields should have proper defaults."""
+        result = ValidationResult()
+        assert result.bioguide_join_valid is False
+        assert result.bioguide_matched_count == 0
+        assert result.bioguide_coverage_pct == 0.0
+
+    def test_bioguide_join_fields_populated(self) -> None:
+        """Bioguide join fields should be settable."""
+        result = ValidationResult(
+            row_count_valid=True,
+            filter_valid=True,
+            bioguide_join_valid=True,
+            bioguide_matched_count=500,
+            bioguide_coverage_pct=10.5,
+        )
+        assert result.bioguide_join_valid is True
+        assert result.bioguide_matched_count == 500
+        assert result.bioguide_coverage_pct == 10.5
+        assert result.all_valid is True  # filter + row_count still determines this

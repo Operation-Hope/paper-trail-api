@@ -8,6 +8,7 @@ from contribution_filters.schema import (
     MIN_CYCLE,
     escape_sql_string,
     get_organizational_filename,
+    get_raw_organizational_filename,
     get_recipient_aggregates_filename,
     validate_cycle,
     validate_path_string,
@@ -115,3 +116,8 @@ class TestFilenameGeneration:
         """Recipient aggregates filenames should follow pattern."""
         assert get_recipient_aggregates_filename(2020) == "recipient_aggregates_2020.parquet"
         assert get_recipient_aggregates_filename(1980) == "recipient_aggregates_1980.parquet"
+
+    def test_raw_organizational_filename(self) -> None:
+        """Raw organizational filenames should follow pattern."""
+        assert get_raw_organizational_filename(2020) == "organizational_contributions_2020.parquet"
+        assert get_raw_organizational_filename(1980) == "organizational_contributions_1980.parquet"

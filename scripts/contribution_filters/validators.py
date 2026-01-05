@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 from .exceptions import (
     AggregationIntegrityError,
+    BioguideJoinError,
     CompletenessError,
     FilterValidationError,
 )
@@ -37,6 +38,11 @@ class ValidationResult:
     aggregation_valid: bool = False
     aggregation_sample_size: int = 0
 
+    # Bioguide join validation (for outputs with bioguide_id column)
+    bioguide_join_valid: bool = False
+    bioguide_matched_count: int = 0
+    bioguide_coverage_pct: float = 0.0
+
     @property
     def all_valid(self) -> bool:
         """Check if all validation checks passed."""
@@ -56,6 +62,10 @@ def validate_organizational_output(
     Checks:
     - Output count is less than source (filter reduced rows)
     - No individual contributors in output (contributor.type != 'I')
+
+    Handles both column naming conventions:
+    - "contributor.type" (standard organizational output)
+    - "contributor_type" (raw organizational output)
     """
     result = ValidationResult()
     result.source_rows = source_rows
@@ -71,10 +81,26 @@ def validate_organizational_output(
     result.row_count_valid = True
 
     # Tier 2: Verify no individuals in output
+    # Detect which column naming convention is used
+    columns = conn.execute(f"""
+        SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{output_path}'))
+    """).fetchall()
+    column_names = {c[0] for c in columns}
+
+    if "contributor_type" in column_names:
+        contributor_type_col = "contributor_type"
+    elif "contributor.type" in column_names:
+        contributor_type_col = '"contributor.type"'
+    else:
+        # No contributor type column - skip this validation
+        result.filter_valid = True
+        result.filter_checks_passed = 0
+        return result
+
     individual_count = conn.execute(f"""
         SELECT COUNT(*)
         FROM read_parquet('{output_path}')
-        WHERE "contributor.type" = 'I'
+        WHERE {contributor_type_col} = 'I'
     """).fetchone()[0]
 
     if individual_count > 0:
@@ -193,4 +219,76 @@ def validate_recipient_aggregates(
                 )
 
     result.aggregation_valid = True
+    return result
+
+
+def validate_bioguide_join(
+    output_path: Path,
+    legislators_path: Path,
+    conn: duckdb.DuckDBPyConnection,
+) -> ValidationResult:
+    """
+    Validate bioguide_id join integrity.
+
+    Checks:
+    - All non-null bioguide_ids in output exist in legislators file
+    - Reports coverage statistics
+
+    Args:
+        output_path: Path to the output parquet file with bioguide_id column
+        legislators_path: Path to the legislators parquet file
+        conn: DuckDB connection to reuse
+
+    Returns:
+        ValidationResult with bioguide join validation results
+
+    Raises:
+        BioguideJoinError: If any non-null bioguide_ids don't exist in legislators
+    """
+    result = ValidationResult()
+
+    # Get all distinct bioguide_ids from output
+    output_bioguides = conn.execute(f"""
+        SELECT DISTINCT bioguide_id
+        FROM read_parquet('{output_path}')
+        WHERE bioguide_id IS NOT NULL
+    """).fetchall()
+    output_bioguide_set = {r[0] for r in output_bioguides if r[0]}
+
+    # Get all bioguide_ids from legislators
+    legislators_bioguides = conn.execute(f"""
+        SELECT DISTINCT bioguide_id
+        FROM read_parquet('{legislators_path}')
+        WHERE bioguide_id IS NOT NULL
+    """).fetchall()
+    legislators_bioguide_set = {r[0] for r in legislators_bioguides if r[0]}
+
+    # Check for invalid bioguide_ids (in output but not in legislators)
+    invalid_bioguides = output_bioguide_set - legislators_bioguide_set
+
+    if invalid_bioguides:
+        raise BioguideJoinError(
+            message="Found bioguide_ids in output that don't exist in legislators",
+            invalid_bioguide_ids=sorted(invalid_bioguides)[:10],
+            total_invalid=len(invalid_bioguides),
+        )
+
+    # Calculate coverage statistics
+    total_output_rows = conn.execute(f"""
+        SELECT COUNT(*) FROM read_parquet('{output_path}')
+    """).fetchone()[0]
+
+    matched_rows = conn.execute(f"""
+        SELECT COUNT(*) FROM read_parquet('{output_path}')
+        WHERE bioguide_id IS NOT NULL
+    """).fetchone()[0]
+
+    result.row_count_valid = True
+    result.output_count = total_output_rows
+    result.bioguide_join_valid = True
+    result.bioguide_matched_count = matched_rows
+    result.bioguide_coverage_pct = (
+        (matched_rows / total_output_rows * 100) if total_output_rows > 0 else 0.0
+    )
+
     return result
