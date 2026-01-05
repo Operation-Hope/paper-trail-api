@@ -5,9 +5,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from .congress_utils import DEFAULT_MIN_CONGRESS
 from .converter import convert_legislators_file
 from .downloader import download_all, download_file
-from .exceptions import CongressLegislatorsConversionError, DownloadError
+from .exceptions import CongressLegislatorsConversionError, DownloadError, SourceNotFoundError
+from .extractor import extract_unified_legislators
 from .schema import FileType
 
 
@@ -136,6 +138,51 @@ def cmd_all(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_unified(args: argparse.Namespace) -> int:
+    """Handle the unified subcommand (merge current + historical into single file)."""
+    output_dir = Path(args.output_dir)
+    current_path = output_dir / "legislators-current.parquet"
+    historical_path = output_dir / "legislators-historical.parquet"
+    output_path = output_dir / "legislators.parquet"
+
+    # Handle min_congress: None means include all, otherwise use the value
+    min_congress = None if args.all_congresses else args.min_congress
+
+    print(f"[{datetime.now().isoformat()}] Creating unified legislators file...")
+
+    try:
+        result = extract_unified_legislators(
+            current_path=current_path,
+            historical_path=historical_path,
+            output_path=output_path,
+            validate=not args.no_validate,
+            sample_size=args.sample_size,
+            min_congress=min_congress,
+        )
+
+        print(f"\n[{datetime.now().isoformat()}] SUCCESS")
+        print(f"  Output: {result.output_path}")
+        print(f"  Total legislators: {result.output_count:,}")
+        if result.min_congress is not None:
+            print(f"  Congress filter: {result.min_congress}+")
+            if result.filtered_out_count > 0:
+                print(f"  Filtered out: {result.filtered_out_count:,}")
+        print(f"  Current: {result.current_count:,}")
+        print(f"  Historical only: {result.output_count - result.current_count:,}")
+        print(f"  With FEC IDs: {result.fec_ids_populated_count:,}")
+        print(f"  With ICPSR: {result.icpsr_populated_count:,}")
+
+        return 0
+
+    except SourceNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        print("Run 'all' command first to generate source parquet files", file=sys.stderr)
+        return 1
+    except CongressLegislatorsConversionError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+
+
 def main() -> int:
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(
@@ -236,6 +283,42 @@ def main() -> int:
         help="Rows per batch for streaming conversion (default: 100000)",
     )
     all_parser.set_defaults(func=cmd_all)
+
+    # Unified subcommand (merge current + historical)
+    unified_parser = subparsers.add_parser(
+        "unified",
+        help="Merge current + historical into single legislators.parquet",
+    )
+    unified_parser.add_argument(
+        "--output-dir",
+        "-o",
+        type=str,
+        default=".",
+        help="Directory containing source parquet files (default: current directory)",
+    )
+    unified_parser.add_argument(
+        "--min-congress",
+        type=int,
+        default=DEFAULT_MIN_CONGRESS,
+        help=f"Minimum congress to include (default: {DEFAULT_MIN_CONGRESS}, i.e. 1979+)",
+    )
+    unified_parser.add_argument(
+        "--all-congresses",
+        action="store_true",
+        help="Include all legislators (no congress filtering)",
+    )
+    unified_parser.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="Skip validation (not recommended)",
+    )
+    unified_parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=100,
+        help="Number of rows to sample for validation (default: 100)",
+    )
+    unified_parser.set_defaults(func=cmd_unified)
 
     args = parser.parse_args()
     return args.func(args)

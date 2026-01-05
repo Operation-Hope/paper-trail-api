@@ -150,3 +150,137 @@ FILE_URLS = {
     FileType.CURRENT: f"{BASE_URL}/legislators-current.csv",
     FileType.HISTORICAL: f"{BASE_URL}/legislators-historical.csv",
 }
+
+# JSON file URLs (for term-level data with congress calculation)
+JSON_FILE_URLS = {
+    FileType.CURRENT: f"{BASE_URL}/legislators-current.json",
+    FileType.HISTORICAL: f"{BASE_URL}/legislators-historical.json",
+}
+
+
+# =============================================================================
+# UNIFIED LEGISLATORS SCHEMA (for merged current + historical output)
+# =============================================================================
+# This schema is used for the unified legislators.parquet file that merges
+# current and historical legislators with bioguide_id as primary key.
+# Key differences from source schema:
+# - icpsr is int64 (TRY_CAST from string to handle malformed values)
+# - fec_ids is list<string> (parsed from comma-separated string)
+# - is_current is bool (derived from source file)
+# - Subset of columns (most useful for downstream joins)
+UNIFIED_LEGISLATORS_SCHEMA = pa.schema(
+    [
+        pa.field("bioguide_id", pa.string(), nullable=False),  # Primary key
+        pa.field("last_name", pa.string()),
+        pa.field("first_name", pa.string()),
+        pa.field("full_name", pa.string()),
+        pa.field("birthday", pa.string()),
+        pa.field("gender", pa.string()),
+        pa.field("type", pa.string()),  # sen/rep (most recent)
+        pa.field("state", pa.string()),  # 2-letter (most recent)
+        pa.field("party", pa.string()),  # Most recent
+        pa.field("icpsr", pa.int64()),  # Nullable - use TRY_CAST for malformed values
+        pa.field("fec_ids", pa.list_(pa.string())),  # Array of FEC candidate IDs
+        pa.field("opensecrets_id", pa.string()),
+        pa.field("is_current", pa.bool_()),
+    ]
+)
+
+UNIFIED_LEGISLATORS_COLUMNS = [
+    "bioguide_id",
+    "last_name",
+    "first_name",
+    "full_name",
+    "birthday",
+    "gender",
+    "type",
+    "state",
+    "party",
+    "icpsr",
+    "fec_ids",
+    "opensecrets_id",
+    "is_current",
+]
+
+
+# =============================================================================
+# UNIFIED LEGISLATORS EXTRACTION QUERY
+# =============================================================================
+# DuckDB SQL query to merge current + historical legislators.
+# Uses UNION ALL with is_current flag, then deduplicates by bioguide_id
+# preferring current over historical records.
+UNIFIED_EXTRACTION_QUERY = """
+WITH combined AS (
+    -- Current legislators
+    SELECT
+        bioguide_id,
+        last_name,
+        first_name,
+        full_name,
+        birthday,
+        gender,
+        type,
+        state,
+        party,
+        TRY_CAST(icpsr_id AS BIGINT) as icpsr,
+        CASE
+            WHEN fec_ids IS NULL OR fec_ids = '' THEN []
+            ELSE STRING_SPLIT(fec_ids, ',')
+        END as fec_ids,
+        opensecrets_id,
+        TRUE as is_current,
+        1 as source_priority  -- Current takes precedence
+    FROM read_parquet('{current_path}')
+    WHERE bioguide_id IS NOT NULL AND bioguide_id != ''
+
+    UNION ALL
+
+    -- Historical legislators
+    SELECT
+        bioguide_id,
+        last_name,
+        first_name,
+        full_name,
+        birthday,
+        gender,
+        type,
+        state,
+        party,
+        TRY_CAST(icpsr_id AS BIGINT) as icpsr,
+        CASE
+            WHEN fec_ids IS NULL OR fec_ids = '' THEN []
+            ELSE STRING_SPLIT(fec_ids, ',')
+        END as fec_ids,
+        opensecrets_id,
+        FALSE as is_current,
+        2 as source_priority  -- Historical is fallback
+    FROM read_parquet('{historical_path}')
+    WHERE bioguide_id IS NOT NULL AND bioguide_id != ''
+),
+ranked AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY bioguide_id
+            ORDER BY source_priority ASC
+        ) as rn
+    FROM combined
+)
+SELECT
+    bioguide_id,
+    last_name,
+    first_name,
+    full_name,
+    birthday,
+    gender,
+    type,
+    state,
+    party,
+    icpsr,
+    fec_ids,
+    opensecrets_id,
+    is_current
+FROM ranked
+WHERE rn = 1
+ORDER BY bioguide_id
+"""

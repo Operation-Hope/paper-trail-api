@@ -120,3 +120,22 @@ class SchemaValidationError(CongressLegislatorsConversionError):
         if extra:
             parts.append(f"extra columns: {sorted(extra)}")
         return " ".join(parts)
+
+
+@dataclass
+class SourceNotFoundError(CongressLegislatorsConversionError):
+    """Source parquet file not found."""
+
+    def __str__(self) -> str:
+        return f"Source file not found: {self.source_path} - {self.message}"
+
+
+@dataclass
+class UnifiedValidationError(CongressLegislatorsConversionError):
+    """Unified legislators validation failed."""
+
+    validation_tier: str = ""
+    details: str = ""
+
+    def __str__(self) -> str:
+        return f"[{self.source_path.name}] {self.validation_tier}: {self.message} - {self.details}"
