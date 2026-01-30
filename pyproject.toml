@@ -11,6 +11,8 @@ dependencies = [
     "duckdb-loader",
     "huggingface-hub>=1.2.3",
     "psycopg-binary>=3.3.2",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
 ]
 
 [project.optional-dependencies]
@@ -79,7 +81,6 @@ ignore = [
     "PLC0415", # import at top level (allow in tests/functions)
     "TC003",   # type checking imports (style preference)
     "PLR1714", # merge comparisons (less readable)
-    "UP038",   # isinstance tuple vs union (style preference)
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -90,9 +91,12 @@ ignore = [
 "scripts/**/*.py" = [
     "PLR0913", # scripts may have many CLI args
 ]
+"api/routers/**/*.py" = [
+    "ARG001",  # unused arguments OK in stubs (query params)
+]
 
 [tool.ruff.lint.isort]
-known-first-party = ["duckdb_loader"]
+known-first-party = ["api", "duckdb_loader"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -124,7 +128,7 @@ filterwarnings = [
 # Coverage Configuration
 # =============================================================================
 [tool.coverage.run]
-source = ["duckdb_loader", "scripts"]
+source = ["api", "duckdb_loader", "scripts"]
 branch = true
 omit = [
     "*/tests/*",
