@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import health, politicians
+from api.routers import bills, donors, health, politicians
 
 app = FastAPI(
     title="Paper Trail API",
@@ -20,4 +20,6 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
-app.include_router(politicians.router, prefix="/api/v1")
+app.include_router(politicians.router, prefix="/api")
+app.include_router(donors.router, prefix="/api")
+app.include_router(bills.router, prefix="/api")
